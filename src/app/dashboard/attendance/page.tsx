@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { CLASSROOMS, classroomOptions } from "@/lib/classrooms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -10,19 +11,11 @@ import { useToast } from "@/components/ui/toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Save, Calendar as CalendarIcon, ExternalLink, RefreshCw, AlertCircle, ClipboardCheck } from "lucide-react";
 
-const CLASSROOMS = [
-  "2/1", "2/2", "2/3", "2/4",
-  "3/1", "3/2", "3/3", "3/4",
-  "4/1", "4/2", "4/3", "4/4", "4/5",
-  "5/1", "5/2", "5/3", "5/4", "5/5",
-  "6/1", "6/2", "6/3", "6/4", "6/5"
-];
-
 interface AttendanceState {
   studentId: string;
   studentName: string;
   number: number;
-  status: "มา" | "สาย" | "ลา" | "ขาด";
+  status: "มา" | "สาย" | "ลา" | "ขาด" | null;
 }
 
 export default function AttendancePage() {
@@ -37,10 +30,14 @@ export default function AttendancePage() {
     return `${year}-${month}-${day}`;
   };
 
-  // Set default classroom based on lock or first classroom
-  const [selectedClassroom, setSelectedClassroom] = useState<string>(
-    session.classroomLock || "2/1"
+  const myClassroom = session.classroomLock || "2/1";
+  const otherClassroomOptions = useMemo(
+    () => CLASSROOMS.filter((cls) => cls !== myClassroom),
+    [myClassroom]
   );
+
+  const [teacherTab, setTeacherTab] = useState<"mine" | "other">("mine");
+  const [selectedClassroom, setSelectedClassroom] = useState<string>(myClassroom);
 
   // Default date is local today
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDate());
@@ -49,14 +46,28 @@ export default function AttendancePage() {
   const [students, setStudents] = useState<AttendanceState[]>([]);
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string>("");
   const [checkedStudentIds, setCheckedStudentIds] = useState<Set<string>>(new Set());
+  const isTeacher = session.role === "teacher";
+  const isReadOnlyView = isTeacher && teacherTab === "other";
+  const activeClassroom = isTeacher && teacherTab === "mine" ? myClassroom : selectedClassroom;
+
+  // Keep attendance aligned with the actual current day so each new day starts from a blank slate.
+  useEffect(() => {
+    const syncToday = () => setSelectedDate(getTodayDate());
+    syncToday();
+
+    const timer = window.setInterval(syncToday, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Load students and attendance records
   const loadData = useCallback(async () => {
-    if (!selectedClassroom || !selectedDate) return;
+    if (!activeClassroom || !selectedDate) return;
     setLoading(true);
+    setStudents([]);
+    setCheckedStudentIds(new Set());
     try {
       // 1. Get student list
-      const studentRes = await api.getStudents(selectedClassroom);
+      const studentRes = await api.getStudents(activeClassroom);
       if (!studentRes.success) {
         throw new Error("ไม่สามารถโหลดรายชื่อนักเรียนได้");
       }
@@ -70,7 +81,7 @@ export default function AttendancePage() {
       }
 
       // 2. Get attendance records for that classroom and date
-      const attendanceRes = await api.getAttendance(selectedClassroom, selectedDate);
+      const attendanceRes = await api.getAttendance(activeClassroom, selectedDate);
       const records = attendanceRes.success ? attendanceRes.attendance : [];
 
       // 3. Map students to their existing status or default to "มา" (Present)
@@ -81,7 +92,7 @@ export default function AttendancePage() {
             studentId: s.studentId,
             studentName: s.name,
             number: s.number || 99,
-            status: (record?.status as any) || "มา",
+            status: (record?.status as AttendanceState["status"]) || null,
           };
         })
         .sort((a, b) => a.number - b.number);
@@ -94,7 +105,7 @@ export default function AttendancePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedClassroom, selectedDate, showToast]);
+  }, [activeClassroom, selectedDate, showToast]);
 
   // Fetch spreadsheet URL from localStorage or configuration
   useEffect(() => {
@@ -104,6 +115,14 @@ export default function AttendancePage() {
     }
     loadData();
   }, [selectedClassroom, selectedDate, loadData]);
+
+  useEffect(() => {
+    if (isTeacher && teacherTab === "mine") {
+      setSelectedClassroom(myClassroom);
+    } else if (isTeacher && teacherTab === "other" && selectedClassroom === myClassroom) {
+      setSelectedClassroom(otherClassroomOptions[0] || myClassroom);
+    }
+  }, [isTeacher, teacherTab, myClassroom, otherClassroomOptions, selectedClassroom]);
 
   // Update status for a specific student
   const handleStatusChange = (studentId: string, status: "มา" | "สาย" | "ลา" | "ขาด") => {
@@ -117,21 +136,15 @@ export default function AttendancePage() {
     });
   };
 
-  // Set all students to present status
-  const setAllPresent = () => {
-    const status = "มา" as const;
-    setStudents((prev) => prev.map((s) => ({ ...s, status })));
-    setCheckedStudentIds(new Set(students.map((s) => s.studentId)));
-    showToast("เปลี่ยนสถานะนักเรียนทั้งหมดเป็น \"มา\"", "info", 1500);
-  };
-
-  const allStudentsChecked = students.length > 0 && checkedStudentIds.size === students.length;
+  const checkedCount = students.filter((s) => s.status !== null).length;
+  const allStudentsChecked = students.length > 0 && checkedCount === students.length;
   const presentCount = students.filter((s) => s.status === "มา").length;
   const lateCount = students.filter((s) => s.status === "สาย").length;
   const leaveCount = students.filter((s) => s.status === "ลา").length;
   const absentCount = students.filter((s) => s.status === "ขาด").length;
   const todayDate = getTodayDate();
   const isToday = selectedDate === todayDate;
+  const editable = isToday && !isReadOnlyView;
 
   // Save attendance
   const handleSave = async () => {
@@ -144,12 +157,18 @@ export default function AttendancePage() {
       showToast("ไม่มีข้อมูลนักเรียนสำหรับบันทึก", "warning");
       return;
     }
+
+    if (!allStudentsChecked) {
+      showToast("กรุณาเช็กสถานะนักเรียนให้ครบทุกคนก่อนบันทึก", "warning");
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = students.map((s) => ({
         studentId: s.studentId,
         studentName: s.studentName,
-        status: s.status,
+        status: s.status as "มา" | "สาย" | "ลา" | "ขาด",
       }));
 
       const res = await api.saveAttendance(selectedClassroom, selectedDate, payload);
@@ -175,10 +194,10 @@ export default function AttendancePage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-orange-950 flex items-center gap-2">
-            <ClipboardCheck className="h-6 w-6 text-orange-600" /> บันทึกการเข้าเรียน
+            <ClipboardCheck className="h-6 w-6 text-orange-600" /> เช็คชื่อนักเรียนเข้าแถว
           </h2>
           <p className="text-gray-500 text-sm mt-1">
-            เลือกชั้นเรียนและวันที่เพื่อเช็คชื่อนักเรียนเข้าเรียนประจำวัน
+            โรงเรียนสาธิตมหาวิทยาลัยขอนแก่น ฝ่ายมัธยมศึกษา มอดินแดง
           </p>
         </div>
 
@@ -196,41 +215,80 @@ export default function AttendancePage() {
 
       {/* Control Card */}
       <Card className="border-orange-100 shadow-sm rounded-3xl overflow-hidden">
-        <CardContent className="p-5 flex flex-col md:flex-row items-end gap-4">
-          <div className="w-full md:w-48">
-            <Select
-              label="ชั้นเรียน / ห้องเรียน"
-              value={selectedClassroom}
-              onChange={(e) => setSelectedClassroom(e.target.value)}
-              disabled={!!session.classroomLock}
-              options={CLASSROOMS.map((cls) => ({ value: cls, label: `ห้องเรียน ${cls}` }))}
-            />
-          </div>
+        <CardContent className="p-5 flex flex-col gap-4">
+          {isTeacher && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setTeacherTab("mine")}
+                className={`h-10 px-4 rounded-full text-sm font-bold border transition-all ${
+                  teacherTab === "mine"
+                    ? "bg-orange-500 text-white border-orange-600 shadow-sm"
+                    : "bg-white text-gray-700 border-orange-200 hover:bg-orange-50"
+                }`}
+              >
+                ห้องของฉัน
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeacherTab("other")}
+                className={`h-10 px-4 rounded-full text-sm font-bold border transition-all ${
+                  teacherTab === "other"
+                    ? "bg-orange-500 text-white border-orange-600 shadow-sm"
+                    : "bg-white text-gray-700 border-orange-200 hover:bg-orange-50"
+                }`}
+              >
+                ดูห้องอื่น
+              </button>
+              {isReadOnlyView && (
+                <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 border border-blue-100">
+                  โหมดอ่านอย่างเดียว
+                </span>
+              )}
+            </div>
+          )}
 
-          <div className="w-full md:w-56 space-y-1.5">
-            <label className="text-sm font-semibold text-gray-700 block">
-              วันที่บันทึกการเช็คชื่อ
-            </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                max={todayDate}
-                className="flex h-11 w-full rounded-full border border-orange-200 bg-white px-4 py-2 text-base font-semibold text-gray-800 transition-all focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+          <div className="flex flex-col md:flex-row items-end gap-4">
+            <div className="w-full md:w-48">
+              <Select
+                label="ชั้นเรียน / ห้องเรียน"
+                labelClassName="text-base font-semibold text-gray-700"
+                className="text-base"
+                value={selectedClassroom}
+                onChange={(e) => setSelectedClassroom(e.target.value)}
+                disabled={isTeacher && teacherTab === "mine"}
+                options={isTeacher && teacherTab === "other" ? classroomOptions(false).filter((opt) => opt.value !== myClassroom) : classroomOptions(false)}
               />
             </div>
-          </div>
 
-          <div className="w-full md:w-auto flex gap-2">
-            <Button
-              variant="outline"
-              onClick={loadData}
-              disabled={loading}
-              className="px-4 h-11 w-full md:w-auto border-orange-200 rounded-full font-bold text-base"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> รีเฟรช
-            </Button>
+            <div className="w-full md:w-56 space-y-1.5">
+              <label className="text-sm font-semibold text-gray-700 block">
+                วันที่บันทึกการเช็คชื่อ
+              </label>
+              <div className="relative">
+                <div
+                  className="flex items-center gap-3 h-11 w-full rounded-full border border-orange-200 bg-gray-50 px-4 py-2 text-base text-gray-500 opacity-60 cursor-not-allowed pointer-events-none"
+                  title="วันที่ถูกล็อก"
+                  aria-disabled="true"
+                >
+                  <CalendarIcon className="h-5 w-5 text-gray-400" />
+                  <span className="select-none">
+                    {new Date(selectedDate).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full md:w-auto flex gap-2">
+              <Button
+                variant="outline"
+                onClick={loadData}
+                disabled={loading}
+                className="px-4 h-11 w-full md:w-auto border-orange-200 rounded-full font-bold text-base"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> รีเฟรช
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -295,11 +353,11 @@ export default function AttendancePage() {
                   {/* มา */}
                   <button
                     onClick={() => handleStatusChange(student.studentId, "มา")}
-                    disabled={!isToday}
+                    disabled={!editable}
                     className={`h-11 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.95] motion-safe:hover:-translate-y-0.5 ${student.status === "มา"
                         ? "bg-emerald-500 border-emerald-600 text-white shadow-lg shadow-emerald-100 ring-2 ring-emerald-200/80"
                         : "bg-white border-emerald-100 text-emerald-700 hover:bg-emerald-50"
-                      } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                      } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     มา
                   </button>
@@ -307,11 +365,11 @@ export default function AttendancePage() {
                   {/* สาย */}
                   <button
                     onClick={() => handleStatusChange(student.studentId, "สาย")}
-                    disabled={!isToday}
+                    disabled={!editable}
                     className={`h-11 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.95] motion-safe:hover:-translate-y-0.5 ${student.status === "สาย"
                         ? "bg-amber-500 border-amber-600 text-white shadow-lg shadow-amber-100 ring-2 ring-amber-200/80"
                         : "bg-white border-amber-100 text-amber-700 hover:bg-amber-50"
-                      } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                      } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     สาย
                   </button>
@@ -319,11 +377,11 @@ export default function AttendancePage() {
                   {/* ลา */}
                   <button
                     onClick={() => handleStatusChange(student.studentId, "ลา")}
-                    disabled={!isToday}
+                    disabled={!editable}
                     className={`h-11 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.95] motion-safe:hover:-translate-y-0.5 ${student.status === "ลา"
                         ? "bg-blue-500 border-blue-600 text-white shadow-lg shadow-blue-100 ring-2 ring-blue-200/80"
                         : "bg-white border-blue-100 text-blue-700 hover:bg-blue-50"
-                      } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                      } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     ลา
                   </button>
@@ -331,11 +389,11 @@ export default function AttendancePage() {
                   {/* ขาด */}
                   <button
                     onClick={() => handleStatusChange(student.studentId, "ขาด")}
-                    disabled={!isToday}
+                    disabled={!editable}
                     className={`h-11 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.95] motion-safe:hover:-translate-y-0.5 ${student.status === "ขาด"
                         ? "bg-red-500 border-red-600 text-white shadow-lg shadow-red-100 ring-2 ring-red-200/80"
                         : "bg-white border-red-100 text-red-700 hover:bg-red-50"
-                      } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                      } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     ขาด
                   </button>
@@ -374,11 +432,11 @@ export default function AttendancePage() {
                           {/* มา */}
                           <button
                             onClick={() => handleStatusChange(student.studentId, "มา")}
-                            disabled={!isToday}
+                            disabled={!editable}
                             className={`flex-1 h-9 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.97] motion-safe:hover:-translate-y-0.5 ${student.status === "มา"
                                 ? "bg-emerald-500 border-emerald-600 text-white shadow-md ring-2 ring-emerald-200/80"
                                 : "bg-white border-emerald-100 text-emerald-700 hover:bg-emerald-50"
-                              } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                              } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                           >
                             มา
                           </button>
@@ -386,11 +444,11 @@ export default function AttendancePage() {
                           {/* สาย */}
                           <button
                             onClick={() => handleStatusChange(student.studentId, "สาย")}
-                            disabled={!isToday}
+                            disabled={!editable}
                             className={`flex-1 h-9 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.97] motion-safe:hover:-translate-y-0.5 ${student.status === "สาย"
                                 ? "bg-amber-500 border-amber-600 text-white shadow-md ring-2 ring-amber-200/80"
                                 : "bg-white border-amber-100 text-amber-700 hover:bg-amber-50"
-                              } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                              } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                           >
                             สาย
                           </button>
@@ -398,11 +456,11 @@ export default function AttendancePage() {
                           {/* ลา */}
                           <button
                             onClick={() => handleStatusChange(student.studentId, "ลา")}
-                            disabled={!isToday}
+                            disabled={!editable}
                             className={`flex-1 h-9 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.97] motion-safe:hover:-translate-y-0.5 ${student.status === "ลา"
                                 ? "bg-blue-500 border-blue-600 text-white shadow-md ring-2 ring-blue-200/80"
                                 : "bg-white border-blue-100 text-blue-700 hover:bg-blue-50"
-                              } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                              } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                           >
                             ลา
                           </button>
@@ -410,11 +468,11 @@ export default function AttendancePage() {
                           {/* ขาด */}
                           <button
                             onClick={() => handleStatusChange(student.studentId, "ขาด")}
-                            disabled={!isToday}
+                            disabled={!editable}
                             className={`flex-1 h-9 rounded-full font-bold text-sm border transform-gpu transition-all duration-200 ease-out active:scale-[0.97] motion-safe:hover:-translate-y-0.5 ${student.status === "ขาด"
                                 ? "bg-red-500 border-red-600 text-white shadow-md ring-2 ring-red-200/80"
                                 : "bg-white border-red-100 text-red-700 hover:bg-red-50"
-                              } ${!isToday ? "opacity-60 cursor-not-allowed" : ""}`}
+                              } ${!editable ? "opacity-60 cursor-not-allowed" : ""}`}
                           >
                             ขาด
                           </button>
@@ -435,7 +493,7 @@ export default function AttendancePage() {
 
               {/* Total */}
               <div className="flex-1 min-w-0 h-10 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center text-sm font-bold text-gray-700">
-                {checkedStudentIds.size}/{students.length}
+                {checkedCount}/{students.length}
               </div>
 
               {/* Present */}
@@ -462,16 +520,24 @@ export default function AttendancePage() {
           </div>
 
           {/* Save Bar */}
-          <div className="flex justify-end gap-2 bg-white p-4 rounded-3xl border border-orange-100 shadow-sm">
-            <Button
-              onClick={handleSave}
-              disabled={loading || students.length === 0 || !isToday}
-              className="h-11 px-8 text-base font-bold rounded-full shadow-md shadow-orange-100"
-              loading={loading}
-            >
-              <Save className="h-4.5 w-4.5" /> บันทึกการเข้าเรียน
-            </Button>
-          </div>
+          {editable ? (
+            <div className="flex justify-end gap-2 bg-white p-4 rounded-3xl border border-orange-100 shadow-sm">
+              <Button
+                onClick={handleSave}
+                disabled={loading || students.length === 0 || !isToday || !allStudentsChecked}
+                className="h-11 px-8 text-base font-bold rounded-full shadow-md shadow-orange-100"
+                loading={loading}
+              >
+                <Save className="h-4.5 w-4.5" /> บันทึกการเข้าเรียน
+              </Button>
+            </div>
+          ) : (
+            <Card className="border-blue-100 bg-blue-50/40 shadow-sm">
+              <CardContent className="p-4 text-sm text-blue-900 font-medium">
+                กำลังดูข้อมูลแบบอ่านอย่างเดียวสำหรับ {selectedClassroom} เท่านั้น คุณครูสามารถสลับไปดูห้องอื่นได้ แต่จะไม่สามารถแก้ไขหรือบันทึกข้อมูลในโหมดนี้ได้
+              </CardContent>
+            </Card>
+          )}
 
         </div>
       )}

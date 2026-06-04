@@ -7,3 +7,38 @@
     @apply bg-orange-50/30 text-gray-800 font-sans;
   }
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  nav,
+  header,
+  button,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .print\:border-0 {
+    border: 0 !important;
+  }
+
+  .print\:bg-white {
+    background: #ffffff !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

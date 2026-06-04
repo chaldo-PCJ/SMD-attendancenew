@@ -155,9 +155,10 @@ export default function StudentPortalPage() {
       <Card className="max-w-2xl w-full shadow-md border-orange-100 hover:shadow-lg transition-shadow duration-300">
         <CardHeader className="bg-orange-500 text-white p-6 relative">
           <div className="absolute top-0 left-0 right-0 h-1 bg-orange-600"></div>
-          <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <GraduationCap className="h-6 w-6" /> พอร์ทัลสืบค้นประวัติเข้าเรียน
-          </CardTitle>
+          <CardTitle className="text-xl font-bold flex items-center gap-2 text-white">
+  <GraduationCap className="h-6 w-6" />
+  ตรวจสอบสถิติการมาเรียนสำหรับนักเรียน
+</CardTitle>
           <CardDescription className="text-orange-100 mt-1 font-semibold text-xs">
             กรอกรหัสประจำตัวนักเรียนเพื่อประมวลผลสถิติส่วนตัว
           </CardDescription>

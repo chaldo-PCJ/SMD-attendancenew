@@ -72,9 +72,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile Navbar */}
       <header className="md:hidden bg-white border-b border-orange-100 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-1 text-gray-600 hover:bg-orange-50 rounded-lg transition-colors mr-1"
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
           <School className="h-6 w-6 text-orange-600" />
           <div>
-            <h1 className="font-bold text-orange-900 text-sm">ระบบเช็คชื่อ ม.ด.</h1>
+            <h1 className="font-bold text-orange-900 text-sm">SMD Attendance System</h1>
             <div className="text-[10px] text-gray-500 font-semibold">
               {session.role === "admin" ? (
                 <span className="flex items-center gap-0.5 text-amber-600">
@@ -92,12 +98,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Database className="h-2.5 w-2.5" /> Mock
             </span>
           )}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1 text-gray-600 hover:bg-orange-50 rounded-lg transition-colors"
-          >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
         </div>
       </header>
 
@@ -157,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3 px-3 py-3.5 bg-orange-50/50 rounded-2xl border border-orange-100/60">
             <School className="h-8 w-8 text-orange-600 flex-shrink-0" />
             <div>
-              <h1 className="font-extrabold text-orange-950 text-base leading-tight">ระบบเช็คชื่อ ม.ด.</h1>
+              <h1 className="font-extrabold text-orange-950 text-base leading-tight">SMD Attendance System</h1>
               <div className="text-xs text-gray-500 font-semibold mt-0.5">
                 {session.role === "admin" ? (
                   <span className="flex items-center gap-1 text-amber-600">

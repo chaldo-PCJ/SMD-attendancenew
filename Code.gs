@@ -1,29 +1,49 @@
 /**
- * Google Apps Script Web App Backend for Attendance Tracking System
- * 
- * Instructions:
- * 1. Create a new Google Spreadsheet.
- * 2. Click Extensions > Apps Script.
- * 3. Replace the default code with this file's contents.
- * 4. Click Deploy > New Deployment.
- * 5. Select type: Web App.
- * 6. Set Description: "Attendance System Backend"
- * 7. Set Execute as: "Me (your email)"
- * 8. Set Who has access: "Anyone"
- * 9. Click Deploy and copy the Web App URL.
- * 10. Paste the URL into your project's .env.local as NEXT_PUBLIC_APPS_SCRIPT_URL.
+ * Google Apps Script backend for the attendance web application.
+ *
+ * Data model
+ * - One sheet per classroom.
+ * - Sheet names are the compact classroom codes used in the workbook: 21, 22, ... 65.
+ * - The first row is the header row:
+ *   วันเดือนปี | เลขประจำตัว | เลขที่ | ชื่อ-สกุล | ชั้น | มา | สาย | ลา | ขาด
+ *
+ * Row conventions
+ * - Roster row: date is blank, student fields are filled, status columns are blank.
+ * - Attendance row: date is filled, student fields are filled, exactly one status column has a value.
+ *
+ * Deployment steps:
+ * 1. Open the spreadsheet that contains the classroom tabs.
+ * 2. Extensions > Apps Script.
+ * 3. Paste this file.
+ * 4. Deploy > New deployment > Web app.
+ * 5. Execute as: Me.
+ * 6. Who has access: Anyone.
+ * 7. Copy the web app URL into NEXT_PUBLIC_APPS_SCRIPT_URL.
  */
+
+var TIME_ZONE = "Asia/Bangkok";
+var SPREADSHEET_ID = "1ygvqyv5xc0Bu9LoE6-QRrrCMzsdyPed2MZa_TXIQauM";
+var SHEET_HEADERS = ["วันเดือนปี", "เลขประจำตัว", "เลขที่", "ชื่อ-สกุล", "ชั้น", "มา", "สาย", "ลา", "ขาด"];
+var STATUS_HEADERS = ["มา", "สาย", "ลา", "ขาด"];
+var CLASSROOMS = [
+  "2/1", "2/2", "2/3", "2/4",
+  "3/1", "3/2", "3/3", "3/4",
+  "4/1", "4/2", "4/3", "4/4", "4/5",
+  "5/1", "5/2", "5/3", "5/4", "5/5",
+  "6/1", "6/2", "6/3", "6/4", "6/5"
+];
 
 function doPost(e) {
   var result;
+
   try {
     if (!e || !e.postData || !e.postData.contents) {
       throw new Error("No post data received");
     }
-    
+
     var requestData = JSON.parse(e.postData.contents);
     var action = requestData.action;
-    
+
     switch (action) {
       case "getStudents":
         result = getStudents(requestData.classroom);
@@ -40,74 +60,84 @@ function doPost(e) {
       case "getAttendance":
         result = getAttendance(requestData.classroom, requestData.date);
         break;
+      case "bootstrapWorkbook":
+        result = bootstrapWorkbook();
+        break;
       default:
         result = { success: false, error: "Unknown action: " + action };
     }
   } catch (err) {
-    result = { success: false, error: err.toString() };
+    result = { success: false, error: String(err && err.message ? err.message : err) };
   }
-  
-  // Return plain text to avoid CORS pre-flight checks and browser blocking issues
+
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.TEXT);
 }
 
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ 
-    success: true, 
-    message: "Google Apps Script Backend is running! Use POST request for operations." 
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: true,
+    message: "Attendance backend is running",
+    classrooms: CLASSROOMS
   })).setMimeType(ContentService.MimeType.TEXT);
 }
 
-// --- Helper function to get sheet or create it with headers ---
-function getOrCreateSheet(sheetName, headers) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    if (headers && headers.length > 0) {
-      sheet.appendRow(headers);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
-    }
-  }
-  return sheet;
+function bootstrapWorkbook() {
+  var ss = getSpreadsheet();
+  var created = [];
+
+  CLASSROOMS.forEach(function (classroom) {
+    var sheet = getOrCreateClassroomSheet(classroom);
+    ensureHeaderRow(sheet);
+    created.push(sheet.getName());
+  });
+
+  return { success: true, sheets: created.length, created: created };
 }
 
-// --- Get Student List ---
 function getStudents(classroom) {
   if (!classroom) {
     throw new Error("Classroom is required for getStudents");
   }
-  var tabName = "Students_" + classroom.replace("/", "-"); // Avoid sheet tab name slashes just in case
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(tabName);
-  
+
+  var sheet = getClassroomSheet(classroom, false);
   if (!sheet) {
     return { success: true, students: [] };
   }
-  
+
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) {
     return { success: true, students: [] };
   }
-  
-  var headers = data[0];
-  var students = [];
-  
+
+  var roster = [];
+  var rosterSeen = {};
+
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    var student = {};
-    for (var j = 0; j < headers.length; j++) {
-      var key = headers[j];
-      student[key] = row[j];
+    if (!hasStudentIdentity(row)) {
+      continue;
     }
-    students.push(student);
+
+    var student = toStudent(row, classroom);
+    if (!student.studentId || !student.name) {
+      continue;
+    }
+    student.classroom = classroom;
+
+    if (isRosterRow(row)) {
+      if (!rosterSeen[student.studentId]) {
+        rosterSeen[student.studentId] = true;
+        roster.push(student);
+      }
+    }
   }
-  
-  return { success: true, students: students };
+
+  roster.sort(sortStudents);
+
+  return { success: true, students: roster };
 }
 
-// --- Save Student List (Overwrite for classroom) ---
 function saveStudents(classroom, students) {
   if (!classroom) {
     throw new Error("Classroom is required for saveStudents");
@@ -115,66 +145,80 @@ function saveStudents(classroom, students) {
   if (!Array.isArray(students)) {
     throw new Error("Students must be an array");
   }
-  
-  var tabName = "Students_" + classroom.replace("/", "-");
-  var headers = ["studentId", "name", "number"];
-  var sheet = getOrCreateSheet(tabName, headers);
-  
-  // Clear all content except headers
-  if (sheet.getLastRow() > 1) {
-    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+
+  var sheet = getOrCreateClassroomSheet(classroom);
+  ensureHeaderRow(sheet);
+
+  var attendanceRows = [];
+  var data = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (isAttendanceRow(row)) {
+      attendanceRows.push(normalizeAttendanceRow(row, classroom));
+    }
   }
-  
-  if (students.length === 0) {
-    return { success: true, message: "Cleared student list" };
-  }
-  
-  var rows = students.map(function(s) {
-    return [
-      s.studentId ? String(s.studentId).trim() : "",
-      s.name ? String(s.name).trim() : "",
-      s.number ? Number(s.number) : ""
-    ];
-  });
-  
-  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-  return { success: true, count: students.length };
+
+  var rosterRows = students
+    .filter(function (student) {
+      return student && String(student.studentId || "").trim() && String(student.name || "").trim();
+    })
+    .map(function (student) {
+      return [
+        "",
+        String(student.studentId).trim(),
+        student.number !== undefined && student.number !== null && String(student.number).trim() !== ""
+          ? Number(student.number)
+          : "",
+        String(student.name).trim(),
+        classroom,
+        "",
+        "",
+        "",
+        ""
+      ];
+    });
+
+  writeSheetRows(sheet, rosterRows.concat(attendanceRows));
+
+  return { success: true, count: rosterRows.length };
 }
 
-// --- Delete Student from Classroom ---
 function deleteStudent(classroom, studentId) {
   if (!classroom || !studentId) {
     throw new Error("Classroom and Student ID are required for deleteStudent");
   }
-  
-  var tabName = "Students_" + classroom.replace("/", "-");
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(tabName);
-  
+
+  var sheet = getClassroomSheet(classroom, false);
   if (!sheet) {
-    return { success: false, error: "Classroom student tab not found" };
+    return { success: false, error: "Classroom sheet not found" };
   }
-  
+
   var data = sheet.getDataRange().getValues();
-  var studentIdColIndex = 0; // "studentId" is column 1
-  var rowToDelete = -1;
-  
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][studentIdColIndex]).trim() === String(studentId).trim()) {
-      rowToDelete = i + 1; // 1-based index
-      break;
-    }
+  if (data.length <= 1) {
+    return { success: true, message: "No data to delete" };
   }
-  
-  if (rowToDelete !== -1) {
-    sheet.deleteRow(rowToDelete);
-    return { success: true, message: "Deleted student ID: " + studentId };
-  } else {
+
+  var remaining = [];
+  var removed = false;
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (isRosterRow(row) && String(row[1]).trim() === String(studentId).trim()) {
+      removed = true;
+      continue;
+    }
+    remaining.push(isAttendanceRow(row) ? normalizeAttendanceRow(row, classroom) : rowToRaw(row, classroom));
+  }
+
+  if (!removed) {
     return { success: false, error: "Student ID " + studentId + " not found in classroom " + classroom };
   }
+
+  writeSheetRows(sheet, remaining);
+  return { success: true, message: "Deleted student ID: " + studentId };
 }
 
-// --- Save Attendance Records ---
 function saveAttendance(classroom, date, attendanceList) {
   if (!classroom || !date) {
     throw new Error("Classroom and Date are required for saveAttendance");
@@ -182,115 +226,398 @@ function saveAttendance(classroom, date, attendanceList) {
   if (!Array.isArray(attendanceList)) {
     throw new Error("Attendance list must be an array");
   }
-  
-  var tabName = "Attend_" + classroom.replace("/", "-");
-  var headers = ["Date", "StudentID", "StudentName", "Status", "Timestamp"];
-  var sheet = getOrCreateSheet(tabName, headers);
-  
+
+  var sheet = getOrCreateClassroomSheet(classroom);
+  ensureHeaderRow(sheet);
+
   var data = sheet.getDataRange().getValues();
-  
-  // 1. Find rows to delete (matching the given date)
-  var rowsToDelete = [];
-  // Go backwards so index remains valid after deleting rows
-  for (var i = data.length - 1; i >= 1; i--) {
-    var rowDate = data[i][0];
-    var formattedRowDate = "";
-    if (rowDate instanceof Date) {
-      formattedRowDate = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    } else {
-      formattedRowDate = String(rowDate).trim();
+  var retainedRows = [];
+  var attendanceDate = buildDateValue(date);
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (isAttendanceRow(row) && formatDateCell(row[0]) === String(date).trim()) {
+      continue;
     }
-    
-    if (formattedRowDate === date) {
-      rowsToDelete.push(i + 1);
+
+    if (isAttendanceRow(row)) {
+      retainedRows.push(normalizeAttendanceRow(row, classroom));
+    } else if (isRosterRow(row)) {
+      retainedRows.push(rowToRaw(row, classroom));
     }
   }
-  
-  // Delete existing records for that date
-  rowsToDelete.forEach(function(rowNum) {
-    sheet.deleteRow(rowNum);
-  });
-  
-  // 2. Append new records
-  if (attendanceList.length === 0) {
-    return { success: true, message: "Cleared attendance for date: " + date };
-  }
-  
+
   var timestamp = new Date();
-  var newRows = attendanceList.map(function(att) {
-    return [
-      date,
-      att.studentId ? String(att.studentId).trim() : "",
-      att.studentName ? String(att.studentName).trim() : "",
-      att.status || "ขาด",
-      timestamp
-    ];
+  var newRows = attendanceList
+    .filter(function (item) {
+      return item && String(item.studentId || "").trim();
+    })
+    .map(function (item) {
+      var status = normalizeStatus(item.status);
+      var statusValues = ["", "", "", ""];
+      if (status) {
+        var idx = STATUS_HEADERS.indexOf(status);
+        if (idx >= 0) {
+          statusValues[idx] = status;
+        }
+      }
+
+      return [
+        attendanceDate,
+        String(item.studentId).trim(),
+        item.number !== undefined && item.number !== null && String(item.number).trim() !== ""
+          ? Number(item.number)
+          : "",
+        String(item.studentName || item.name || "").trim(),
+        classroom,
+        statusValues[0],
+        statusValues[1],
+        statusValues[2],
+        statusValues[3]
+      ];
+    });
+
+  // Prefer roster order if the list already exists in the sheet.
+  var rosterOrder = getRosterOrderMap(data);
+  newRows.sort(function (a, b) {
+    var aNumber = rosterOrder[a[1]];
+    var bNumber = rosterOrder[b[1]];
+
+    if (aNumber !== undefined && bNumber !== undefined) {
+      return aNumber - bNumber;
+    }
+    if (aNumber !== undefined) return -1;
+    if (bNumber !== undefined) return 1;
+    return String(a[1]).localeCompare(String(b[1]), "en", { numeric: true });
   });
-  
-  sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, headers.length).setValues(newRows);
-  return { success: true, count: attendanceList.length, date: date };
+
+  writeSheetRows(sheet, retainedRows.concat(newRows));
+
+  return { success: true, count: newRows.length, date: date };
 }
 
-// --- Get Attendance Records ---
 function getAttendance(classroom, date) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var results = [];
-  
-  // Define which sheets to scan
-  var sheetsToScan = [];
-  if (classroom) {
-    var targetTabName = "Attend_" + classroom.replace("/", "-");
-    var targetSheet = ss.getSheetByName(targetTabName);
-    if (targetSheet) {
-      sheetsToScan.push({ name: classroom, sheet: targetSheet });
-    }
-  } else {
-    // Scan all sheets with "Attend_" prefix
-    var allSheets = ss.getSheets();
-    allSheets.forEach(function(s) {
-      var name = s.getName();
-      if (name.indexOf("Attend_") === 0) {
-        var clsName = name.replace("Attend_", "").replace("-", "/");
-        sheetsToScan.push({ name: clsName, sheet: s });
-      }
-    });
-  }
-  
-  sheetsToScan.forEach(function(item) {
-    var sheet = item.sheet;
-    var cls = item.name;
+  var sheets = getAttendanceSheets(classroom);
+  var result = [];
+
+  sheets.forEach(function (sheet) {
+    var classroomName = sheetNameToClassroom(sheet.getName());
     var data = sheet.getDataRange().getValues();
-    
-    if (data.length <= 1) return; // Only headers
-    
-    var headers = data[0];
+
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
-      var rowDate = row[0];
-      var formattedRowDate = "";
-      if (rowDate instanceof Date) {
-        formattedRowDate = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      } else {
-        formattedRowDate = String(rowDate).trim();
-      }
-      
-      // Filter by date if specified
-      if (date && formattedRowDate !== date) {
+      if (!isAttendanceRow(row)) {
         continue;
       }
-      
-      var record = {
-        classroom: cls,
-        date: formattedRowDate,
-        studentId: row[1],
-        studentName: row[2],
-        status: row[3],
-        timestamp: row[4]
-      };
-      
-      results.push(record);
+
+      var rowDate = formatDateCell(row[0]);
+      if (date && rowDate !== String(date).trim()) {
+        continue;
+      }
+
+      var status = statusFromRow(row);
+      result.push({
+        classroom: classroomName || classroom,
+        date: rowDate,
+        studentId: String(row[1]).trim(),
+        studentName: String(row[3] || "").trim(),
+        status: status,
+        timestamp: row[0] instanceof Date ? row[0].toISOString() : undefined
+      });
     }
   });
-  
-  return { success: true, attendance: results };
+
+  result.sort(function (a, b) {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    if (a.classroom !== b.classroom) return a.classroom.localeCompare(b.classroom, "en", { numeric: true });
+    return String(a.studentId).localeCompare(String(b.studentId), "en", { numeric: true });
+  });
+
+  return { success: true, attendance: result };
+}
+
+function getAttendanceSheets(classroom) {
+  var ss = getSpreadsheet();
+
+  if (classroom) {
+    var sheet = getClassroomSheet(classroom, false);
+    return sheet ? [sheet] : [];
+  }
+
+  return ss.getSheets().filter(function (sheet) {
+    return sheetNameToClassroom(sheet.getName()) !== null;
+  });
+}
+
+function getClassroomSheet(classroom, createIfMissing) {
+  if (createIfMissing === undefined) {
+    createIfMissing = true;
+  }
+
+  var ss = getSpreadsheet();
+  var sheetName = classroomToSheetName(classroom);
+  var sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet && createIfMissing) {
+    sheet = ss.insertSheet(sheetName);
+    ensureHeaderRow(sheet);
+  }
+
+  if (sheet) {
+    ensureHeaderRow(sheet);
+  }
+
+  return sheet;
+}
+
+function getOrCreateClassroomSheet(classroom) {
+  return getClassroomSheet(classroom, true);
+}
+
+function ensureHeaderRow(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, SHEET_HEADERS.length).setValues([SHEET_HEADERS]);
+    sheet.getRange(1, 1, 1, SHEET_HEADERS.length).setFontWeight("bold");
+    return;
+  }
+
+  var currentHeaders = sheet.getRange(1, 1, 1, SHEET_HEADERS.length).getValues()[0];
+  var normalizedCurrent = currentHeaders.map(function (value) {
+    return String(value || "").trim();
+  });
+
+  var matches = true;
+  for (var i = 0; i < SHEET_HEADERS.length; i++) {
+    if (normalizedCurrent[i] !== SHEET_HEADERS[i]) {
+      matches = false;
+      break;
+    }
+  }
+
+  if (!matches) {
+    sheet.getRange(1, 1, 1, SHEET_HEADERS.length).setValues([SHEET_HEADERS]);
+    sheet.getRange(1, 1, 1, SHEET_HEADERS.length).setFontWeight("bold");
+  }
+}
+
+function writeSheetRows(sheet, rows) {
+  ensureHeaderRow(sheet);
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, SHEET_HEADERS.length).clearContent();
+  }
+
+  if (!rows || rows.length === 0) {
+    return;
+  }
+
+  sheet.getRange(2, 1, rows.length, SHEET_HEADERS.length).setValues(rows);
+  sheet.getRange(2, 1, rows.length, 1).setNumberFormat("dd/MM/yyyy");
+}
+
+function rowToRaw(row, classroom) {
+  return [
+    row[0] || "",
+    String(row[1] || "").trim(),
+    row[2] !== null && row[2] !== undefined && String(row[2]).trim() !== "" ? Number(row[2]) : "",
+    String(row[3] || "").trim(),
+    row[4] || classroom,
+    row[5] || "",
+    row[6] || "",
+    row[7] || "",
+    row[8] || ""
+  ];
+}
+
+function normalizeAttendanceRow(row, classroom) {
+  var status = statusFromRow(row);
+  var statusValues = ["", "", "", ""];
+  if (status) {
+    var idx = STATUS_HEADERS.indexOf(status);
+    if (idx >= 0) {
+      statusValues[idx] = status;
+    }
+  }
+
+  return [
+    row[0] || buildDateValue(formatDateCell(row[0])),
+    String(row[1] || "").trim(),
+    row[2] !== null && row[2] !== undefined && String(row[2]).trim() !== "" ? Number(row[2]) : "",
+    String(row[3] || "").trim(),
+    row[4] || classroom,
+    statusValues[0],
+    statusValues[1],
+    statusValues[2],
+    statusValues[3]
+  ];
+}
+
+function isRosterRow(row) {
+  if (!row || row.length < 4) return false;
+  return !formatDateCell(row[0]) &&
+    String(row[1] || "").trim() &&
+    String(row[3] || "").trim() &&
+    !rowHasStatus(row);
+}
+
+function isAttendanceRow(row) {
+  if (!row) return false;
+  return !!formatDateCell(row[0]) && !!String(row[1] || "").trim() && !!String(row[3] || "").trim();
+}
+
+function rowHasStatus(row) {
+  for (var i = 5; i <= 8; i++) {
+    if (String(row[i] || "").trim()) return true;
+  }
+  return false;
+}
+
+function hasStudentIdentity(row) {
+  return !!String(row && row[1] || "").trim() || !!String(row && row[3] || "").trim();
+}
+
+function statusFromRow(row) {
+  for (var i = 5; i <= 8; i++) {
+    var value = String(row[i] || "").trim();
+    if (!value) continue;
+
+    var header = STATUS_HEADERS[i - 5];
+    if (value === header || value === "1" || value === "✓" || value === "TRUE") {
+      return header;
+    }
+    // If the cell already contains the Thai status text, accept it.
+    if (STATUS_HEADERS.indexOf(value) >= 0) {
+      return value;
+    }
+    return header;
+  }
+  return "";
+}
+
+function normalizeStatus(status) {
+  var text = String(status || "").trim();
+  return STATUS_HEADERS.indexOf(text) >= 0 ? text : "";
+}
+
+function formatDateCell(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    return Utilities.formatDate(value, TIME_ZONE, "yyyy-MM-dd");
+  }
+  return String(value).trim();
+}
+
+function buildDateValue(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    return value;
+  }
+
+  var text = String(value).trim();
+  if (!text) return "";
+
+  var match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0);
+  }
+
+  var parsed = new Date(text);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return text;
+}
+
+function classroomToSheetName(classroom) {
+  var text = String(classroom || "").trim();
+  if (!text) return text;
+
+  if (/^\d{2}$/.test(text)) {
+    return text;
+  }
+
+  var match = text.match(/^([2-6])\s*\/\s*([1-5])$/);
+  if (match) {
+    return match[1] + match[2];
+  }
+
+  var digits = text.replace(/\D/g, "");
+  if (digits.length === 2) {
+    return digits;
+  }
+
+  return text;
+}
+
+function sheetNameToClassroom(sheetName) {
+  var name = String(sheetName || "").trim();
+  if (!name) return null;
+
+  if (/^[2-6][1-5]$/.test(name)) {
+    return name.charAt(0) + "/" + name.charAt(1);
+  }
+
+  var match = name.match(/^([2-6])\s*\/\s*([1-5])$/);
+  if (match) {
+    return match[1] + "/" + match[2];
+  }
+
+  return null;
+}
+
+function sortStudents(a, b) {
+  var aNumber = Number(a.number || 0);
+  var bNumber = Number(b.number || 0);
+
+  if (aNumber !== bNumber) return aNumber - bNumber;
+  return String(a.studentId || "").localeCompare(String(b.studentId || ""), "en", { numeric: true });
+}
+
+function toStudent(row, classroom) {
+  return {
+    studentId: String(row[1] || "").trim(),
+    name: String(row[3] || "").trim(),
+    number: row[2] !== null && row[2] !== undefined && String(row[2]).trim() !== ""
+      ? Number(row[2])
+      : 0,
+    classroom: normalizeClassroomValue(row[4], classroom)
+  };
+}
+
+function getRosterOrderMap(data) {
+  var map = {};
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!isRosterRow(row)) {
+      continue;
+    }
+
+    var sid = String(row[1] || "").trim();
+    if (!sid) continue;
+
+    var number = row[2] !== null && row[2] !== undefined && String(row[2]).trim() !== ""
+      ? Number(row[2])
+      : i;
+    map[sid] = Number.isFinite(number) ? number : i;
+  }
+
+  return map;
+}
+
+function getSpreadsheet() {
+  if (!SPREADSHEET_ID) {
+    throw new Error("SPREADSHEET_ID is not configured");
+  }
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
+function normalizeClassroomValue(value, fallbackClassroom) {
+  var text = String(value || "").trim();
+  if (/^[2-6]\/[1-5]$/.test(text)) {
+    return text;
+  }
+  return fallbackClassroom || text;
 }

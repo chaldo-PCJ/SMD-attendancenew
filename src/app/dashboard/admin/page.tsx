@@ -21,13 +21,108 @@ const CLASSROOMS = [
   "6/1", "6/2", "6/3", "6/4", "6/5"
 ];
 
+const normalizeSheetNameToClassroom = (sheetName: string): string | null => {
+  const trimmed = sheetName.trim();
+
+  if (CLASSROOMS.includes(trimmed)) {
+    return trimmed;
+  }
+
+  const compact = trimmed.replace(/\s+/g, "");
+  const slashMatch = compact.match(/^([2-6])\/([1-5])$/);
+  if (slashMatch) {
+    const classroom = `${slashMatch[1]}/${slashMatch[2]}`;
+    return CLASSROOMS.includes(classroom) ? classroom : null;
+  }
+
+  const digitsOnly = compact.replace(/\D/g, "");
+  if (digitsOnly.length === 2) {
+    const classroom = `${digitsOnly[0]}/${digitsOnly[1]}`;
+    return CLASSROOMS.includes(classroom) ? classroom : null;
+  }
+
+  return null;
+};
+
+const normalizeHeader = (key: string) =>
+  key
+    .replace(/^\uFEFF/, "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[-_]/g, "");
+
+const matchesHeader = (key: string, patterns: RegExp[]) => {
+  const normalized = normalizeHeader(key);
+  return patterns.some((pattern) => pattern.test(normalized) || pattern.test(key));
+};
+
+const parseCellValue = (value: any) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value).trim() : "";
+  return String(value).replace(/^\uFEFF/, "").trim();
+};
+
+const parseExcelRow = (
+  row: Record<string, any>,
+  fallbackNumber: number,
+  headerMap: Record<string, string | null>
+): Student | null => {
+  const studentId = parseCellValue(
+    headerMap.studentId ? row[headerMap.studentId] : row["เลขประจำตัว"] ?? row["รหัสประจำตัว"] ?? row["รหัสนักเรียน"]
+  );
+  const name = parseCellValue(
+    headerMap.name ? row[headerMap.name] : row["ชื่อ - สกุล"] ?? row["ชื่อ-สกุล"] ?? row["ชื่อ"] ?? row["ชื่อ-นามสกุล"]
+  );
+  const numberValue = parseCellValue(
+    headerMap.number ? row[headerMap.number] : row["เลขที่"] ?? row["ลำดับ"] ?? fallbackNumber
+  );
+  const parsedNumber = Number(numberValue);
+  const number = Number.isFinite(parsedNumber) ? parsedNumber : fallbackNumber;
+
+  if (!studentId || !name) return null;
+
+  // Classroom is derived from the sheet name because Excel often auto-formats
+  // the "ชั้น" column as a date (for example 2/1 -> 2026-01-01T17:00:00.000Z).
+  // The workbook's sheet name is the reliable classroom source.
+  return { studentId, name, number };
+};
+
+const buildHeaderMap = (headerRow: any[]): Record<string, string | null> => {
+  const map: Record<string, string | null> = {
+    studentId: null,
+    number: null,
+    name: null,
+    classroom: null,
+  };
+
+  headerRow.forEach((header, index) => {
+    const key = typeof header === "string" ? header : String(header ?? "");
+    if (!key) return;
+
+    const column = XLSX.utils.encode_col(index);
+    if (matchesHeader(key, [/เลขประจำตัว/, /รหัสประจำตัว/, /รหัสนักเรียน/, /studentid/, /id/])) {
+      map.studentId = column;
+    } else if (matchesHeader(key, [/เลขที่/, /number/, /no/, /ลำดับ/])) {
+      map.number = column;
+    } else if (matchesHeader(key, [/ชื่อ.*สกุล/, /ชื่อ-สกุล/, /ชื่อนามสกุล/, /fullname/, /name/, /ชื่อ/])) {
+      map.name = column;
+    } else if (matchesHeader(key, [/ชั้น/, /classroom/, /ห้อง/])) {
+      map.classroom = column;
+    }
+  });
+
+  return map;
+};
+
 export default function AdminPage() {
   const { session } = useAuth();
   const { showToast } = useToast();
   
+  const [viewMode, setViewMode] = useState<"classroom" | "all">("classroom");
   const [selectedClassroom, setSelectedClassroom] = useState<string>("2/1");
   const [loading, setLoading] = useState(false);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [classroomStudents, setClassroomStudents] = useState<Student[]>([]);
+  const [allStudents, setAllStudents] = useState<Array<Student & { classroom: string }>>([]);
   
   // Settings
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string>("");
@@ -66,7 +161,7 @@ export default function AdminPage() {
       if (res.success) {
         // Sort students by seat number
         const sorted = (res.students || []).sort((a, b) => (a.number || 0) - (b.number || 0));
-        setStudents(sorted);
+        setClassroomStudents(sorted);
       } else {
         throw new Error("ไม่สามารถโหลดรายชื่อนักเรียนได้");
       }
@@ -78,58 +173,153 @@ export default function AdminPage() {
     }
   }, [selectedClassroom, showToast]);
 
+  const loadAllStudents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const results = await Promise.all(
+        CLASSROOMS.map(async (classroom) => {
+          const res = await api.getStudents(classroom);
+          return {
+            classroom,
+            students: res.success ? (res.students || []) : [],
+          };
+        })
+      );
+
+      const merged = results.flatMap(({ classroom, students }) =>
+        students.map((student) => ({
+          ...student,
+          classroom,
+        }))
+      );
+
+      merged.sort((a, b) => {
+        const classroomCompare = a.classroom.localeCompare(b.classroom, undefined, { numeric: true });
+        if (classroomCompare !== 0) return classroomCompare;
+        return (a.number || 0) - (b.number || 0);
+      });
+
+      setAllStudents(merged);
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "โหลดข้อมูลรวมไม่สำเร็จ", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
   useEffect(() => {
-    loadStudents();
-  }, [selectedClassroom, loadStudents]);
+    if (viewMode === "all") {
+      loadAllStudents();
+    } else {
+      loadStudents();
+    }
+  }, [selectedClassroom, loadAllStudents, loadStudents, viewMode]);
+
+  const displayedStudents = viewMode === "all" ? allStudents : classroomStudents;
+  const canEditCurrentView = viewMode === "classroom";
 
   // Bulk Excel Import
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setLoading(true);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const data = evt.target?.result;
-        const workbook = XLSX.read(data, { type: "binary" });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const json: any[] = XLSX.utils.sheet_to_json(sheet);
+        const workbook = XLSX.read(data, { type: "array" });
 
-        if (json.length === 0) {
-          showToast("ไม่พบข้อมูลในไฟล์ Excel ที่อัปโหลด", "warning");
+        const importedByClassroom = new Map<string, Student[]>();
+        const skippedSheets: string[] = [];
+        const emptySheets: string[] = [];
+
+        workbook.SheetNames.forEach((sheetName) => {
+          const classroom = normalizeSheetNameToClassroom(sheetName);
+          if (!classroom) {
+            skippedSheets.push(sheetName);
+            return;
+          }
+
+          const sheet = workbook.Sheets[sheetName];
+          const aoa: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          if (aoa.length < 2) {
+            emptySheets.push(sheetName);
+            return;
+          }
+
+          const headerMap = buildHeaderMap(aoa[0] || []);
+          const rows = aoa.slice(1);
+          const parsedStudents = rows
+            .map((row, index) => {
+              const rowObj: Record<string, any> = {};
+              row.forEach((cellValue, cellIndex) => {
+                rowObj[XLSX.utils.encode_col(cellIndex)] = cellValue;
+              });
+
+              // Preserve named headers when available, but always keep A:D access as fallback.
+              (aoa[0] || []).forEach((header, cellIndex) => {
+                if (!header) return;
+                rowObj[String(header)] = row[cellIndex];
+              });
+
+              return parseExcelRow(rowObj, index + 1, headerMap);
+            })
+            .filter((item): item is Student => Boolean(item))
+            .sort((a, b) => a.number - b.number);
+
+          if (parsedStudents.length > 0) {
+            importedByClassroom.set(classroom, parsedStudents);
+          } else {
+            emptySheets.push(sheetName);
+          }
+        });
+
+        if (importedByClassroom.size === 0) {
+          showToast("ไม่พบ sheet ห้องเรียนที่รองรับในไฟล์นี้", "warning");
           return;
         }
 
-        // Map English & Thai headers
-        const parsedStudents: Student[] = json.map((row, index) => {
-          const studentIdKey = Object.keys(row).find(
-            (k) => /studentId|student_id|รหัสนักเรียน|รหัสประจำตัว|รหัส/i.test(k)
-          );
-          const nameKey = Object.keys(row).find(
-            (k) => /name|fullname|ชื่อ|ชื่อ-นามสกุล|ชื่อนามสกุล/i.test(k)
-          );
-          const numberKey = Object.keys(row).find(
-            (k) => /number|no|เลขที่|ลำดับ/i.test(k)
-          );
+        let successCount = 0;
+        const failedClassrooms: string[] = [];
 
-          return {
-            studentId: studentIdKey ? String(row[studentIdKey]).trim() : `TEMP-${index + 1}`,
-            name: nameKey ? String(row[nameKey]).trim() : `นักเรียนใหม่-${index + 1}`,
-            number: numberKey ? Number(row[numberKey]) : index + 1,
-          };
-        });
+        for (const [classroom, parsedStudents] of importedByClassroom.entries()) {
+          const res = await api.saveStudents(classroom, parsedStudents);
+          if (res.success) {
+            successCount += 1;
+          } else {
+            failedClassrooms.push(classroom);
+          }
+        }
 
-        // Sort parsed students
-        parsedStudents.sort((a, b) => a.number - b.number);
-        setStudents(parsedStudents);
-        showToast(`นำเข้าข้อมูลนักเรียนชั่วคราว ${parsedStudents.length} คนสำเร็จ! อย่าลืมกด "บันทึกข้อมูลเข้า Google Sheet"`, "info", 4000);
+        const sheetList = Array.from(importedByClassroom.keys()).join(", ");
+        const warnings = [
+          skippedSheets.length > 0 ? `ข้าม sheet: ${skippedSheets.join(", ")}` : "",
+          emptySheets.length > 0 ? `sheet ว่าง/ไม่ครบข้อมูล: ${emptySheets.join(", ")}` : "",
+          failedClassrooms.length > 0 ? `บันทึกไม่สำเร็จ: ${failedClassrooms.join(", ")}` : "",
+        ].filter(Boolean);
+
+        showToast(
+          `นำเข้าข้อมูลสำเร็จ ${successCount} ห้อง (${sheetList})` +
+            (warnings.length ? ` | ${warnings.join(" | ")}` : ""),
+          failedClassrooms.length > 0 ? "warning" : "success",
+          5000
+        );
+
+        if (viewMode === "all") {
+          await loadAllStudents();
+        } else {
+          await loadStudents();
+        }
       } catch (err) {
         console.error(err);
         showToast("ไฟล์ Excel รูปแบบไม่ถูกต้อง ไม่สามารถนำเข้าได้", "error");
+      } finally {
+        setLoading(false);
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
     
     // Clear input
     if (fileInputRef.current) {
@@ -141,7 +331,7 @@ export default function AdminPage() {
   const handleSaveAll = async () => {
     setLoading(true);
     try {
-      const res = await api.saveStudents(selectedClassroom, students);
+      const res = await api.saveStudents(selectedClassroom, classroomStudents);
       if (res.success) {
         showToast(`บันทึกรายชื่อนักเรียนห้อง ${selectedClassroom} ไปยังเซิร์ฟเวอร์เรียบร้อย!`, "success");
         loadStudents();
@@ -159,6 +349,10 @@ export default function AdminPage() {
   // Trigger manual add
   const handleManualAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEditCurrentView) {
+      showToast("โหมดแสดงผลรวมทุกห้องเป็นแบบอ่านอย่างเดียว กรุณาสลับกลับไปโหมดรายห้องเพื่อแก้ไข", "warning");
+      return;
+    }
     if (!newStudent.studentId || !newStudent.name || !newStudent.number) {
       showToast("กรุณากรอกข้อมูลให้ครบทุกช่อง", "warning");
       return;
@@ -172,13 +366,13 @@ export default function AdminPage() {
     };
 
     // Check duplicate ID in local memory
-    if (students.some((s) => s.studentId === item.studentId)) {
+    if (classroomStudents.some((s) => s.studentId === item.studentId)) {
       showToast(`รหัสนักเรียน ${item.studentId} ซ้ำกับในตาราง`, "error");
       return;
     }
 
-    const updated = [...students, item].sort((a, b) => a.number - b.number);
-    setStudents(updated);
+    const updated = [...classroomStudents, item].sort((a, b) => a.number - b.number);
+    setClassroomStudents(updated);
     setNewStudent({ studentId: "", name: "", number: "" });
     setIsAddOpen(false);
     showToast("เพิ่มนักเรียนชั่วคราวลงในตารางแล้ว (กดบันทึกเพื่อบันทึกจริง)", "success");
@@ -187,6 +381,10 @@ export default function AdminPage() {
   // Trigger single delete (direct server delete + reload)
   const confirmDelete = async () => {
     if (!studentToDelete) return;
+    if (!canEditCurrentView) {
+      showToast("โหมดแสดงผลรวมทุกห้องเป็นแบบอ่านอย่างเดียว กรุณาสลับกลับไปโหมดรายห้องเพื่อแก้ไข", "warning");
+      return;
+    }
     setLoading(true);
     try {
       const res = await api.deleteStudent(selectedClassroom, studentToDelete.studentId);
@@ -197,16 +395,16 @@ export default function AdminPage() {
         loadStudents();
       } else {
         // If not saved on server yet (just in local table memory), delete locally
-        const updated = students.filter((s) => s.studentId !== studentToDelete.studentId);
-        setStudents(updated);
+        const updated = classroomStudents.filter((s) => s.studentId !== studentToDelete.studentId);
+        setClassroomStudents(updated);
         showToast("ลบรายการออกจากตารางชั่วคราวสำเร็จ", "success");
         setIsDeleteOpen(false);
         setStudentToDelete(null);
       }
     } catch (err: any) {
       // Direct local delete as fallback if failed on server
-      const updated = students.filter((s) => s.studentId !== studentToDelete.studentId);
-      setStudents(updated);
+      const updated = classroomStudents.filter((s) => s.studentId !== studentToDelete.studentId);
+      setClassroomStudents(updated);
       showToast("ลบข้อมูลชั่วคราวเรียบร้อย", "success");
       setIsDeleteOpen(false);
       setStudentToDelete(null);
@@ -217,23 +415,41 @@ export default function AdminPage() {
 
   // Clear memory roster
   const confirmClear = () => {
-    setStudents([]);
+    if (!canEditCurrentView) {
+      showToast("โหมดแสดงผลรวมทุกห้องเป็นแบบอ่านอย่างเดียว กรุณาสลับกลับไปโหมดรายห้องเพื่อแก้ไข", "warning");
+      return;
+    }
+    setClassroomStudents([]);
     setIsClearOpen(false);
     showToast("เคลียร์รายชื่อนักเรียนออกจากตารางชั่วคราวแล้ว", "info");
   };
 
   // Template Excel Download helper
   const downloadTemplate = () => {
-    const headers = [["studentId", "name", "number"]];
-    const data = [
-      ["1001", "เด็กชายมงคล เรียนเก่ง", 1],
-      ["1002", "เด็กหญิงวาสนา ประเสริฐ", 2],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "รายชื่อนักเรียน");
+    const headers = [["เลขประจำตัว", "เลขที่", "ชื่อ - สกุล", "ชั้น"]];
+
+    const sampleSheets = [
+      { sheetName: "21", classroom: "2/1" },
+      { sheetName: "22", classroom: "2/2" },
+      { sheetName: "31", classroom: "3/1" },
+    ];
+
+    sampleSheets.forEach((item, index) => {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ...headers,
+        [
+          `68${String(index + 1).padStart(4, "0")}`,
+          1,
+          `ตัวอย่างนักเรียนห้อง ${item.classroom}`,
+          item.classroom,
+        ],
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, item.sheetName);
+    });
+
     XLSX.writeFile(wb, `student_import_template.xlsx`);
-    showToast("ดาวน์โหลดไฟล์แม่แบบเรียบร้อย", "success");
+    showToast("ดาวน์โหลดไฟล์แม่แบบหลายห้องเรียบร้อย", "success");
   };
 
   return (
@@ -302,6 +518,9 @@ export default function AdminPage() {
                     hover:file:bg-orange-100
                     border border-orange-200 rounded-xl cursor-pointer"
                 />
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  รองรับไฟล์ที่มีหลาย sheet ต่อห้องเรียน โดยใช้ชื่อ sheet เช่น <strong>21</strong> = ห้อง <strong>2/1</strong>, <strong>22</strong> = ห้อง <strong>2/2</strong> และอ่านคอลัมน์ <strong>เลขประจำตัว, เลขที่, ชื่อ - สกุล, ชั้น</strong>
+                </p>
               </div>
 
               <div className="flex gap-2">
@@ -346,24 +565,56 @@ export default function AdminPage() {
               <div>
                 <CardTitle className="text-orange-950 font-bold text-base flex items-center gap-2">
                   <FileSpreadsheet className="h-5 w-5 text-orange-600" />
-                  รายชื่อนักเรียนห้องเรียน {selectedClassroom}
+                  {viewMode === "all" ? "รายชื่อนักเรียนทั้งหมดทุกห้อง" : `รายชื่อนักเรียนห้องเรียน ${selectedClassroom}`}
                 </CardTitle>
                 <CardDescription className="text-xs font-semibold text-gray-500">
-                  มีข้อมูลอยู่ในตารางขณะนี้: {students.length} คน
+                  มีข้อมูลอยู่ในตารางขณะนี้: {displayedStudents.length} คน
                 </CardDescription>
               </div>
 
-              {/* Classroom filter inside header */}
-              <div className="w-40">
-                <select
-                  value={selectedClassroom}
-                  onChange={(e) => setSelectedClassroom(e.target.value)}
-                  className="h-9 w-full rounded-xl border border-orange-200 bg-white px-3 text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
-                >
-                  {CLASSROOMS.map((cls) => (
-                    <option key={cls} value={cls}>ห้องเรียน {cls}</option>
-                  ))}
-                </select>
+              <div className="flex flex-col sm:items-end gap-2">
+                <div className="inline-flex rounded-full border border-orange-200 bg-white p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("classroom")}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${
+                      viewMode === "classroom"
+                        ? "bg-orange-500 text-white shadow-sm"
+                        : "text-gray-700 hover:bg-orange-50"
+                    }`}
+                  >
+                    รายห้อง
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("all")}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${
+                      viewMode === "all"
+                        ? "bg-orange-500 text-white shadow-sm"
+                        : "text-gray-700 hover:bg-orange-50"
+                    }`}
+                  >
+                    ทุกห้อง
+                  </button>
+                </div>
+
+                {viewMode === "classroom" ? (
+                  <div className="w-40">
+                    <select
+                      value={selectedClassroom}
+                      onChange={(e) => setSelectedClassroom(e.target.value)}
+                      className="h-9 w-full rounded-xl border border-orange-200 bg-white px-3 text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    >
+                      {CLASSROOMS.map((cls) => (
+                        <option key={cls} value={cls}>ห้องเรียน {cls}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="rounded-full bg-blue-50 border border-blue-100 px-3 py-1 text-[11px] font-bold text-blue-700">
+                    โหมดทุกห้องเป็นแบบอ่านอย่างเดียว
+                  </div>
+                )}
               </div>
             </CardHeader>
 
@@ -374,7 +625,7 @@ export default function AdminPage() {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500 mb-2"></div>
                   <span className="text-gray-400 text-xs font-semibold">กำลังโหลดข้อมูลนักเรียน...</span>
                 </div>
-              ) : students.length === 0 ? (
+              ) : displayedStudents.length === 0 ? (
                 <div className="p-12 text-center text-gray-400 text-xs font-bold space-y-1">
                   <p>ยังไม่มีรายชื่อนักเรียนในห้องเรียนนี้</p>
                   <p className="font-medium text-gray-400">กรุณาอัปโหลด Excel หรือกรอกเพิ่มด้วยตนเองด้านซ้าย</p>
@@ -388,11 +639,12 @@ export default function AdminPage() {
                           <TableHead className="w-16 text-center">เลขที่</TableHead>
                           <TableHead className="w-32">รหัสประจำตัว</TableHead>
                           <TableHead>ชื่อ - นามสกุล</TableHead>
+                          <TableHead className="w-24 text-center">ชั้น</TableHead>
                           <TableHead className="w-20 text-center">จัดการ</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {students.map((student) => (
+                        {displayedStudents.map((student: any) => (
                           <TableRow key={student.studentId} className="hover:bg-orange-50/10">
                             <TableCell className="text-center font-bold text-gray-500">
                               {student.number}
@@ -403,16 +655,23 @@ export default function AdminPage() {
                             <TableCell className="font-semibold text-gray-800">
                               {student.name}
                             </TableCell>
+                            <TableCell className="text-center font-semibold text-gray-600">
+                              {student.classroom || selectedClassroom}
+                            </TableCell>
                             <TableCell className="text-center">
-                              <button
-                                onClick={() => {
-                                  setStudentToDelete(student);
-                                  setIsDeleteOpen(true);
-                                }}
-                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              {canEditCurrentView ? (
+                                <button
+                                  onClick={() => {
+                                    setStudentToDelete(student);
+                                    setIsDeleteOpen(true);
+                                  }}
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 font-bold">ดูอย่างเดียว</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -421,15 +680,17 @@ export default function AdminPage() {
                   </div>
 
                   {/* Save button footer */}
-                  <div className="p-4 bg-orange-50/30 border-t border-orange-100 flex justify-end gap-2">
-                    <Button
-                      onClick={handleSaveAll}
-                      disabled={loading}
-                      className="font-bold flex items-center gap-1.5"
-                    >
-                      <Save className="h-4 w-4" /> บันทึกข้อมูลเข้า Google Sheet
-                    </Button>
-                  </div>
+                  {canEditCurrentView && (
+                    <div className="p-4 bg-orange-50/30 border-t border-orange-100 flex justify-end gap-2">
+                      <Button
+                        onClick={handleSaveAll}
+                        disabled={loading}
+                        className="font-bold flex items-center gap-1.5"
+                      >
+                        <Save className="h-4 w-4" /> บันทึกข้อมูลเข้า Google Sheet
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
 

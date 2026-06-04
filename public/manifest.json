@@ -1,18 +1,31 @@
 {
-  "name": "ระบบเช็คชื่อนักเรียน ม.ด.",
-  "short_name": "เช็คชื่อ ม.ด.",
-  "description": "ระบบบันทึกและติดตามการเช็คชื่อเข้าเรียนของนักเรียน โรงเรียนมัธยมดีเด่น",
+  "name": "SMD Attendance System",
+  "short_name": "SMD Attendance",
+  "description": "ระบบบันทึกและติดตามการเช็คชื่อเข้าเรียนของนักเรียน โรงเรียนสาธิตมหาวิทยาลัยขอนแก่น ฝ่ายมัธยมศึกษา มอดินแดง",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fff7ed",
   "theme_color": "#f97316",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }
