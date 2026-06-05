@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from "@/context/AuthContext";
 import { api, AttendanceRecord, Student } from "@/lib/api";
 import { CLASSROOMS, ALL_CLASSROOMS_VALUE, classroomOptions, classroomLabel } from "@/lib/classrooms";
+import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -225,6 +226,63 @@ export default function DailyReportPage() {
     showToast("เลือกบันทึกเป็น PDF จากหน้าต่างพิมพ์ของเบราว์เซอร์ได้เลย", "info", 3000);
   };
 
+  const exportExcel = () => {
+    try {
+      const dateLabel = selectedDate || "";
+      const isAllRooms = isAdmin && selectedClassroom === ALL_CLASSROOMS_VALUE;
+
+      const safeFileName = (s: string) =>
+        s
+          .trim()
+          .replace(/\s+/g, "_")
+          .replace(/[\\/:*?\"<>|]+/g, "-");
+
+      if (isAllRooms) {
+        // ห้อง+สรุปภาพรวมรายห้อง
+        const rows = summaries.map((s) => ({
+          "ห้องเรียน": `ห้องเรียน ${s.classroom}`,
+          "สถานะการส่ง": s.hasRecord ? "ส่งแล้ว" : "ยังไม่ส่ง",
+          "นักเรียนทั้งหมด": s.hasRecord ? s.totalChecked : "-",
+          "มา (คน)": s.hasRecord ? s.present : "-",
+          "สาย (คน)": s.hasRecord ? s.late : "-",
+          "ลา (คน)": s.hasRecord ? s.leave : "-",
+          "ขาด (คน)": s.hasRecord ? s.absent : "-",
+          "% อัตราการเข้าเรียน": s.hasRecord ? `${s.percentage}%` : "-",
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
+
+        XLSX.writeFile(wb, safeFileName(`daily-report_${dateLabel}_all_rooms.xlsx`));
+        showToast("Export Excel สำเร็จ (ทุกห้อง)", "success", 2500);
+      } else {
+        // ห้องเดียว: รายชื่อนักเรียน
+        const dataRows = attendance
+          .filter((record) => record.classroom === classroomScope)
+          .map((record, idx) => ({
+            "เลขที่": idx + 1,
+            "รหัสนักเรียน": record.studentId,
+            "ชื่อ-นามสกุล": record.studentName,
+            "สถานะ": record.status,
+          }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(dataRows);
+        XLSX.utils.book_append_sheet(wb, ws, "Student Status");
+
+        XLSX.writeFile(
+          wb,
+          safeFileName(`daily-report_${dateLabel}_${classroomScope}.xlsx`)
+        );
+        showToast("Export Excel สำเร็จ (ห้องเดียว)", "success", 2500);
+      }
+    } catch (e: any) {
+      console.error(e);
+      showToast(e?.message || "Export Excel ไม่สำเร็จ", "error");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -242,6 +300,9 @@ export default function DailyReportPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={printReport} className="border-orange-200">
             <Printer className="h-4 w-4" /> พิมพ์ / Export PDF
+          </Button>
+          <Button variant="outline" onClick={exportExcel} disabled={loading} className="border-orange-200">
+            <Download className="h-4 w-4" /> Export Excel
           </Button>
           <Button variant="outline" onClick={loadReport} disabled={loading} className="border-orange-200">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> รีเฟรชข้อมูล

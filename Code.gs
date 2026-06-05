@@ -48,6 +48,9 @@ function doPost(e) {
       case "getStudents":
         result = getStudents(requestData.classroom);
         break;
+      case "getAllStudents":
+        result = getAllStudents();
+        break;
       case "saveStudents":
         result = saveStudents(requestData.classroom, requestData.students);
         break;
@@ -74,6 +77,7 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.TEXT);
 }
 
+
 function doGet() {
   return ContentService.createTextOutput(JSON.stringify({
     success: true,
@@ -98,6 +102,15 @@ function bootstrapWorkbook() {
 function getStudents(classroom) {
   if (!classroom) {
     throw new Error("Classroom is required for getStudents");
+  }
+
+  // CacheService for roster (6h)
+  var cache = CacheService.getScriptCache();
+  var cacheKey = "getStudents:" + String(classroom);
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    var parsed = JSON.parse(cached);
+    return parsed;
   }
 
   var sheet = getClassroomSheet(classroom, false);
@@ -135,8 +148,63 @@ function getStudents(classroom) {
 
   roster.sort(sortStudents);
 
-  return { success: true, students: roster };
+  var result = { success: true, students: roster };
+  // ScriptCache TTL max ~ 21600 seconds (6h)
+  cache.put(cacheKey, JSON.stringify(result), 60 * 60 * 6);
+  return result;
 }
+
+function getAllStudents() {
+  // CacheService for all students (6h)
+  var cache = CacheService.getScriptCache();
+  var cacheKey = "getAllStudents";
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    var parsed = JSON.parse(cached);
+    return parsed;
+  }
+
+  var roster = [];
+  var rosterSeen = {};
+
+  for (var c = 0; c < CLASSROOMS.length; c++) {
+    var classroom = CLASSROOMS[c];
+    var sheet = getClassroomSheet(classroom, false);
+    if (!sheet) continue;
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) continue;
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!hasStudentIdentity(row)) continue;
+
+      var student = toStudent(row, classroom);
+      if (!student.studentId || !student.name) continue;
+      student.classroom = classroom;
+
+      if (isRosterRow(row)) {
+        // stable unique key: classroom + studentId
+        var key = classroom + ":" + String(student.studentId);
+        if (!rosterSeen[key]) {
+          rosterSeen[key] = true;
+          roster.push(student);
+        }
+      }
+    }
+  }
+
+  roster.sort(function (a, b) {
+    var cls = String(a.classroom || "").localeCompare(String(b.classroom || ""), "en", { numeric: true });
+    if (cls !== 0) return cls;
+    return sortStudents(a, b);
+  });
+
+  var result = { success: true, students: roster };
+  cache.put(cacheKey, JSON.stringify(result), 60 * 60 * 6);
+  return result;
+}
+
 
 function saveStudents(classroom, students) {
   if (!classroom) {

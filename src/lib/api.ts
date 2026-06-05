@@ -128,6 +128,78 @@ export const setForceMockMode = (force: boolean) => {
   }
 };
 
+// ---- Client-side caching + request coalescing ----
+const MEM_CACHE = new Map<string, { expiresAt: number; value: any }>();
+const INFLIGHT = new Map<string, Promise<any>>();
+const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const nowMs = () => Date.now();
+
+function safeJsonParse<T>(raw: string): T | null {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getCacheStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function getCachedValue(key: string): any | null {
+  const mem = MEM_CACHE.get(key);
+  if (mem && mem.expiresAt > nowMs()) return mem.value;
+
+  const ls = getCacheStorage();
+  if (!ls) return null;
+  const raw = ls.getItem(key);
+  if (!raw) return null;
+  const parsed = safeJsonParse<{ expiresAt: number; value: any }>(raw);
+  if (!parsed) return null;
+  if (parsed.expiresAt <= nowMs()) return null;
+
+  MEM_CACHE.set(key, parsed);
+  return parsed.value;
+}
+
+function setCachedValue(key: string, value: any, ttlMs: number) {
+  const expiresAt = nowMs() + ttlMs;
+  const entry = { expiresAt, value };
+  MEM_CACHE.set(key, entry);
+
+  const ls = getCacheStorage();
+  if (!ls) return;
+  try {
+    ls.setItem(key, JSON.stringify(entry));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function cacheKey(action: string, payload: any) {
+  // stable-ish key
+  return `api_cache_v1:${action}:${JSON.stringify(normalizePayloadForKey(payload || {}))}`;
+}
+
+
+function normalizePayloadForKey(payload: any) {
+  // ensure consistent key for undefined vs missing props
+  if (!payload || typeof payload !== "object") return payload;
+  return Object.keys(payload)
+    .sort()
+    .reduce((acc: any, k) => {
+      acc[k] = payload[k];
+      return acc;
+    }, {});
+}
+
+
 // Generic API caller
 async function callApi(action: string, payload: any = {}): Promise<any> {
   if (isMockMode()) {
@@ -172,6 +244,55 @@ async function callApi(action: string, payload: any = {}): Promise<any> {
     throw new Error(error.message || "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
   }
 }
+
+async function callApiCached(
+  action: string,
+  payload: any,
+  opts: { ttlMs?: number; useCache?: boolean } = {}
+): Promise<any> {
+  const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
+  const useCache = opts.useCache !== false;
+  const key = cacheKey(action, payload);
+
+  if (useCache) {
+    const cached = getCachedValue(key);
+    if (cached !== null) return cached;
+  }
+
+  const inflightKey = `inflight:${key}`;
+  const existing = INFLIGHT.get(inflightKey);
+  if (existing) return existing;
+
+  const p = (async () => {
+    try {
+      const res = await callApi(action, payload);
+      if (useCache) setCachedValue(key, res, ttlMs);
+      return res;
+    } finally {
+      INFLIGHT.delete(inflightKey);
+    }
+  })();
+
+  INFLIGHT.set(inflightKey, p);
+  return p;
+}
+
+function invalidateCaches(prefixes: string[]) {
+  // best-effort invalidation (memory + localStorage)
+  for (const [k] of MEM_CACHE.entries()) {
+    if (prefixes.some((p) => k.startsWith(p))) MEM_CACHE.delete(k);
+  }
+
+  const ls = getCacheStorage();
+  if (!ls) return;
+
+  for (let i = ls.length - 1; i >= 0; i--) {
+    const k = ls.key(i);
+    if (!k) continue;
+    if (prefixes.some((p) => k.startsWith(p))) ls.removeItem(k);
+  }
+}
+
 
 // Mock Request Handler
 function handleMockRequest(action: string, payload: any): any {
@@ -251,25 +372,49 @@ function handleMockRequest(action: string, payload: any): any {
 
 // Exported API Methods
 export const api = {
+  // Cache-first (6h) for roster/reference data
   getStudents: (classroom: string): Promise<{ success: boolean; students: Student[] }> =>
-    callApi("getStudents", { classroom }),
-    
+    callApiCached("getStudents", { classroom }, { ttlMs: DEFAULT_TTL_MS }),
+
+  getAllStudents: (): Promise<{ success: boolean; students: (Student & { classroom: string })[] }> =>
+    callApiCached("getAllStudents", {}, { ttlMs: DEFAULT_TTL_MS }),
+
+
+
+  // Invalidate caches after writes
   saveStudents: (classroom: string, students: Student[]): Promise<{ success: boolean; count: number }> =>
-    callApi("saveStudents", { classroom, students }),
-    
+    callApi("saveStudents", { classroom, students }).then((res) => {
+      // roster changed for classroom => invalidate roster + attendance
+      invalidateCaches(["api_cache_v1:getStudents:", "api_cache_v1:getAttendance:"]);
+      return res;
+    }),
+
+
   deleteStudent: (classroom: string, studentId: string): Promise<{ success: boolean; message: string }> =>
-    callApi("deleteStudent", { classroom, studentId }),
-    
+    callApi("deleteStudent", { classroom, studentId }).then((res) => {
+      // invalidate roster + any attendance query
+      invalidateCaches(["api_cache_v1:getStudents:", "api_cache_v1:getAttendance:"]);
+      return res;
+    }),
+
+
   saveAttendance: (
     classroom: string,
     date: string,
     attendance: { studentId: string; studentName: string; status: string }[]
   ): Promise<{ success: boolean; count: number; date: string }> =>
-    callApi("saveAttendance", { classroom, date, attendance }),
-    
+    callApi("saveAttendance", { classroom, date, attendance }).then((res) => {
+      // Attendance changes affect any attendance query
+      invalidateCaches(["api_cache_v1:getAttendance:"]);
+      return res;
+    }),
+
+
+  // Cache-first (6h) for attendance queries; still safe because roster rarely changes and day attendance changes only when saving
   getAttendance: (
     classroom?: string,
     date?: string
   ): Promise<{ success: boolean; attendance: AttendanceRecord[] }> =>
-    callApi("getAttendance", { classroom, date }),
+    callApiCached("getAttendance", { classroom, date }, { ttlMs: DEFAULT_TTL_MS }),
 };
+

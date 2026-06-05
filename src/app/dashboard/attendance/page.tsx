@@ -50,14 +50,29 @@ export default function AttendancePage() {
   const isReadOnlyView = isTeacher && teacherTab === "other";
   const activeClassroom = isTeacher && teacherTab === "mine" ? myClassroom : selectedClassroom;
 
+  const todayDate = useMemo(() => getTodayDate(), []);
+
+
+
   // Keep attendance aligned with the actual current day so each new day starts from a blank slate.
   useEffect(() => {
-    const syncToday = () => setSelectedDate(getTodayDate());
-    syncToday();
+    // Update selectedDate only when day changes (minimize setInterval wakes)
 
-    const timer = window.setInterval(syncToday, 60_000);
-    return () => window.clearInterval(timer);
+    const updateIfNeeded = () => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      const next = `${year}-${month}-${day}`;
+      setSelectedDate((prev) => (prev === next ? prev : next));
+    };
+
+    updateIfNeeded();
+
+    const t = window.setInterval(updateIfNeeded, 5 * 60_000); // every 5 minutes
+    return () => window.clearInterval(t);
   }, []);
+
 
   // Load students and attendance records
   const loadData = useCallback(async () => {
@@ -66,28 +81,33 @@ export default function AttendancePage() {
     setStudents([]);
     setCheckedStudentIds(new Set());
     try {
-      // 1. Get student list
-      const studentRes = await api.getStudents(activeClassroom);
+      const [studentRes, attendanceRes] = await Promise.all([
+        api.getStudents(activeClassroom),
+        api.getAttendance(activeClassroom, selectedDate),
+      ]);
+
       if (!studentRes.success) {
         throw new Error("ไม่สามารถโหลดรายชื่อนักเรียนได้");
       }
 
       const classroomStudents = studentRes.students;
-
       if (classroomStudents.length === 0) {
         setStudents([]);
         setLoading(false);
         return;
       }
 
-      // 2. Get attendance records for that classroom and date
-      const attendanceRes = await api.getAttendance(activeClassroom, selectedDate);
       const records = attendanceRes.success ? attendanceRes.attendance : [];
 
-      // 3. Map students to their existing status or default to "มา" (Present)
+      // Map students to their existing status using O(1) lookup
+      const recordByStudentId = new Map<string, (typeof records)[number]>();
+      for (const r of records) {
+        recordByStudentId.set(String(r.studentId), r);
+      }
+
       const mappedStudents: AttendanceState[] = classroomStudents
         .map((s) => {
-          const record = records.find((r) => String(r.studentId) === String(s.studentId));
+          const record = recordByStudentId.get(String(s.studentId));
           return {
             studentId: s.studentId,
             studentName: s.name,
@@ -99,6 +119,7 @@ export default function AttendancePage() {
 
       setStudents(mappedStudents);
       setCheckedStudentIds(new Set(records.map((r) => String(r.studentId))));
+
     } catch (err: any) {
       console.error(err);
       showToast(err.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล", "error");
@@ -136,15 +157,41 @@ export default function AttendancePage() {
     });
   };
 
-  const checkedCount = students.filter((s) => s.status !== null).length;
-  const allStudentsChecked = students.length > 0 && checkedCount === students.length;
-  const presentCount = students.filter((s) => s.status === "มา").length;
-  const lateCount = students.filter((s) => s.status === "สาย").length;
-  const leaveCount = students.filter((s) => s.status === "ลา").length;
-  const absentCount = students.filter((s) => s.status === "ขาด").length;
-  const todayDate = getTodayDate();
+  const {
+    checkedCount,
+    allStudentsChecked,
+    presentCount,
+    lateCount,
+    leaveCount,
+    absentCount,
+  } = useMemo(() => {
+    const checked = students.reduce(
+      (acc, s) => {
+        if (s.status !== null) acc.checkedCount++;
+        if (s.status === "มา") acc.presentCount++;
+        else if (s.status === "สาย") acc.lateCount++;
+        else if (s.status === "ลา") acc.leaveCount++;
+        else if (s.status === "ขาด") acc.absentCount++;
+        return acc;
+      },
+      {
+        checkedCount: 0,
+        presentCount: 0,
+        lateCount: 0,
+        leaveCount: 0,
+        absentCount: 0,
+      }
+    );
+
+    return {
+      ...checked,
+      allStudentsChecked: students.length > 0 && checked.checkedCount === students.length,
+    };
+  }, [students]);
+
   const isToday = selectedDate === todayDate;
   const editable = isToday && !isReadOnlyView;
+
 
   // Save attendance
   const handleSave = async () => {
@@ -501,20 +548,21 @@ export default function AttendancePage() {
                 {presentCount}
               </div>
 
+                {/* Late */}
+              <div className="flex-1 min-w-0 h-10 rounded-full border border-amber-200 bg-amber-50 flex items-center justify-center text-sm font-bold text-amber-700">
+                {lateCount}
+              </div>
+
+                {/* Leave */}
+              <div className="flex-1 min-w-0 h-10 rounded-full border border-blue-200 bg-blue-50 flex items-center justify-center text-sm font-bold text-blue-700">
+                {leaveCount}
+              </div>
+
               {/* Absent */}
               <div className="flex-1 min-w-0 h-10 rounded-full border border-red-200 bg-red-50 flex items-center justify-center text-sm font-bold text-red-700">
                 {absentCount}
               </div>
 
-              {/* Leave */}
-              <div className="flex-1 min-w-0 h-10 rounded-full border border-blue-200 bg-blue-50 flex items-center justify-center text-sm font-bold text-blue-700">
-                {leaveCount}
-              </div>
-
-              {/* Late */}
-              <div className="flex-1 min-w-0 h-10 rounded-full border border-amber-200 bg-amber-50 flex items-center justify-center text-sm font-bold text-amber-700">
-                {lateCount}
-              </div>
 
             </div>
           </div>

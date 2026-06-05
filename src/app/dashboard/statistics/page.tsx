@@ -23,7 +23,10 @@ import {
   Target,
   AlertTriangle,
   CheckCircle2,
+  Printer,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import {
   Chart as ChartJS,
@@ -82,10 +85,12 @@ const statusConfig = [
 export default function StatisticsPage() {
   const { session } = useAuth();
   const { showToast } = useToast();
+
   const [loading, setLoading] = useState(false);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>("all");
+
   const [selectedClassroom, setSelectedClassroom] = useState<string>(
     session.role === "admin" ? ALL_CLASSROOMS_VALUE : session.classroomLock || "2/1"
   );
@@ -162,9 +167,7 @@ export default function StatisticsPage() {
   const overallAttendanceRate = useMemo(() => {
     const total = filteredAttendance.length;
     if (total === 0) return 0;
-    const attended = filteredAttendance.filter(
-      (r) => r.status === "มา" || r.status === "สาย"
-    ).length;
+    const attended = filteredAttendance.filter((r) => r.status === "มา" || r.status === "สาย").length;
     return Math.round((attended / total) * 100);
   }, [filteredAttendance]);
 
@@ -294,12 +297,7 @@ export default function StatisticsPage() {
       labels: statusConfig.map((item) => item.label),
       datasets: [
         {
-          data: [
-            statusCounts.present,
-            statusCounts.late,
-            statusCounts.leave,
-            statusCounts.absent,
-          ],
+          data: [statusCounts.present, statusCounts.late, statusCounts.leave, statusCounts.absent],
           backgroundColor: statusConfig.map((item) => item.color),
           borderColor: ["#ffffff", "#ffffff", "#ffffff", "#ffffff"],
           borderWidth: 2,
@@ -384,9 +382,7 @@ export default function StatisticsPage() {
                 title: (context: any) => {
                   const index = context[0].dataIndex;
                   const item = studentAnalytics[index];
-                  return item
-                    ? `${item.number}. ${item.studentName}`
-                    : context[0].label;
+                  return item ? `${item.number}. ${item.studentName}` : context[0].label;
                 },
                 label: (context: any) => `อัตราเข้าเรียน: ${context.raw}%`,
               }
@@ -394,9 +390,7 @@ export default function StatisticsPage() {
                 label: (context: any) => {
                   const index = context.dataIndex;
                   const item = classroomSummaries[index];
-                  return item && item.hasData
-                    ? `อัตราเข้าเรียน: ${context.raw}%`
-                    : "ยังไม่มีข้อมูลเช็คชื่อ";
+                  return item && item.hasData ? `อัตราเข้าเรียน: ${context.raw}%` : "ยังไม่มีข้อมูลเช็คชื่อ";
                 },
               },
         },
@@ -449,7 +443,7 @@ export default function StatisticsPage() {
       },
       {
         label: "วันบันทึกที่พบ",
-        value: `${uniqueDates} วัน`,
+          value: `${uniqueDates} วัน`,
         icon: CheckCircle2,
         tone: "blue",
       },
@@ -470,6 +464,72 @@ export default function StatisticsPage() {
     students.length,
     uniqueDates,
   ]);
+
+  const exportPdf = () => {
+    window.print();
+    showToast("เลือกบันทึกเป็น PDF จากหน้าต่างพิมพ์ของเบราว์เซอร์ได้เลย", "info", 3000);
+  };
+
+  const safeFileName = (s: string) =>
+    s
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/[\\/:*?\"<>|]+/g, "-");
+
+  const exportExcel = () => {
+    try {
+      const scopeLabel = scopeIsAll ? "all" : effectiveClassroom;
+      const rangeLabel = rangeFilter === "all" ? "all" : rangeFilter;
+      const fileBase = `statistics_${rangeLabel}_${safeFileName(scopeLabel)}`;
+
+      if (!scopeIsAll) {
+        const rows = studentAnalytics.map((item) => ({
+          "เลขที่": item.number,
+          "นักเรียน": item.studentName,
+          "รหัสนักเรียน": item.studentId,
+          "มา": item.present,
+          "สาย": item.late,
+          "ลา": item.leave,
+          "ขาด": item.absent,
+          "รวมวันที่มีข้อมูล": item.total,
+          "% เข้าเรียน": `${item.attendanceRate}%`,
+        }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Student Analytics");
+        XLSX.writeFile(wb, safeFileName(`${fileBase}.xlsx`));
+        showToast("Export Excel สำเร็จ (สถิตินักเรียน)", "success", 2500);
+        return;
+      }
+
+      const rows = classroomSummaries
+        .slice()
+        .sort((a, b) => {
+          if (!a.hasData && !b.hasData) return 0;
+          if (!a.hasData) return 1;
+          if (!b.hasData) return -1;
+          return a.percentage - b.percentage;
+        })
+        .map((item) => ({
+          "ห้องเรียน": classroomLabel(item.classroom),
+          "สถานะ": item.hasData ? "ส่งแล้ว" : "ยังไม่ส่ง",
+          "นักเรียนทั้งหมด": item.hasData ? item.totalRecords : "-",
+          "มา": item.hasData ? item.present : "-",
+          "สาย": item.hasData ? item.late : "-",
+          "ลา": item.hasData ? item.leave : "-",
+          "ขาด": item.hasData ? item.absent : "-",
+          "% อัตราการเข้าเรียน": item.hasData ? `${item.percentage}%` : "-",
+        }));
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Classroom Analytics");
+      XLSX.writeFile(wb, safeFileName(`${fileBase}.xlsx`));
+      showToast("Export Excel สำเร็จ (สถิติรายห้อง)", "success", 2500);
+    } catch (e: any) {
+      console.error(e);
+      showToast(e?.message || "Export Excel ไม่สำเร็จ", "error");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -498,20 +558,39 @@ export default function StatisticsPage() {
             />
           </div>
 
-          <div className="w-full lg:w-56">
+      <div className="w-full lg:w-56">
             <Select
               label="ช่วงเวลาวิเคราะห์"
               value={rangeFilter}
               onChange={(e) => setRangeFilter(e.target.value as RangeFilter)}
               options={[
                 { value: "all", label: "ข้อมูลทั้งหมด" },
+                { value: "3d", label: "3 วันที่ผ่านมา" },
                 { value: "7d", label: "7 วันที่ผ่านมา" },
+                { value: "14d", label: "14 วันที่ผ่านมา" },
                 { value: "30d", label: "30 วันที่ผ่านมา" },
+                { value: "90d", label: "90 วันที่ผ่านมา" },
               ]}
             />
           </div>
 
           <div className="flex gap-2 w-full lg:w-auto">
+            <Button
+              variant="outline"
+              onClick={exportPdf}
+              disabled={loading}
+              className="px-4 w-full lg:w-auto border-orange-200"
+            >
+              <Printer className="h-4 w-4" /> Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={exportExcel}
+              disabled={loading}
+              className="px-4 w-full lg:w-auto border-orange-200"
+            >
+              <Download className="h-4 w-4" /> Export Excel
+            </Button>
             <Button
               variant="outline"
               onClick={loadStats}
@@ -725,10 +804,10 @@ export default function StatisticsPage() {
                         <th className="px-4 py-3 text-left font-bold">ห้องเรียน</th>
                         <th className="px-4 py-3 text-center font-bold">สถานะ</th>
                         <th className="px-4 py-3 text-center font-bold">นักเรียนทั้งหมด</th>
-                        <th className="px-4 py-3 text-center text-emerald-700 font-bold">มา</th>
-                        <th className="px-4 py-3 text-center text-amber-700 font-bold">สาย</th>
-                        <th className="px-4 py-3 text-center text-blue-700 font-bold">ลา</th>
-                        <th className="px-4 py-3 text-center text-red-700 font-bold">ขาด</th>
+                        <th className="px-4 py-3 text-center font-bold text-emerald-700">มา</th>
+                        <th className="px-4 py-3 text-center font-bold text-amber-700">สาย</th>
+                        <th className="px-4 py-3 text-center font-bold text-blue-700">ลา</th>
+                        <th className="px-4 py-3 text-center font-bold text-red-700">ขาด</th>
                         <th className="px-4 py-3 text-right font-bold">% อัตราการเข้าเรียน</th>
                       </tr>
                     </thead>
@@ -758,25 +837,15 @@ export default function StatisticsPage() {
                             <td className="px-4 py-3 text-center font-semibold text-gray-700">
                               {item.hasData ? `${item.totalRecords} คน` : "-"}
                             </td>
-                            <td className="px-4 py-3 text-center text-emerald-700 font-semibold">
-                              {item.hasData ? item.present : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-amber-700 font-semibold">
-                              {item.hasData ? item.late : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-blue-700 font-semibold">
-                              {item.hasData ? item.leave : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-red-700 font-semibold">
-                              {item.hasData ? item.absent : "-"}
-                            </td>
+                            <td className="px-4 py-3 text-center text-emerald-700 font-semibold">{item.hasData ? item.present : "-"}</td>
+                            <td className="px-4 py-3 text-center text-amber-700 font-semibold">{item.hasData ? item.late : "-"}</td>
+                            <td className="px-4 py-3 text-center text-blue-700 font-semibold">{item.hasData ? item.leave : "-"}</td>
+                            <td className="px-4 py-3 text-center text-red-700 font-semibold">{item.hasData ? item.absent : "-"}</td>
                             <td className="px-4 py-3 text-right font-bold">
                               {item.hasData ? (
                                 <span
                                   className={`px-2 py-0.5 rounded-lg ${
-                                    item.percentage >= 80
-                                      ? "bg-emerald-50 text-emerald-800"
-                                      : "bg-red-50 text-red-800"
+                                    item.percentage >= 80 ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
                                   }`}
                                 >
                                   {item.percentage}%
@@ -798,3 +867,4 @@ export default function StatisticsPage() {
     </div>
   );
 }
+

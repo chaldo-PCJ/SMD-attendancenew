@@ -176,22 +176,16 @@ export default function AdminPage() {
   const loadAllStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const results = await Promise.all(
-        CLASSROOMS.map(async (classroom) => {
-          const res = await api.getStudents(classroom);
-          return {
-            classroom,
-            students: res.success ? (res.students || []) : [],
-          };
-        })
-      );
+      // Bulk endpoint: reduces dozens of Apps Script calls to one
+      const res = await api.getAllStudents();
+      if (!res.success) {
+        throw new Error("ไม่สามารถโหลดรายชื่อนักเรียนทั้งหมดได้");
+      }
 
-      const merged = results.flatMap(({ classroom, students }) =>
-        students.map((student) => ({
-          ...student,
-          classroom,
-        }))
-      );
+      const merged = (res.students || []).map((s) => ({
+        ...s,
+        classroom: (s as any).classroom,
+      }));
 
       merged.sort((a, b) => {
         const classroomCompare = a.classroom.localeCompare(b.classroom, undefined, { numeric: true });
@@ -207,6 +201,7 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, [showToast]);
+
 
   useEffect(() => {
     if (viewMode === "all") {
