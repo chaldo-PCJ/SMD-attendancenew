@@ -21,7 +21,7 @@ export default function LoginPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pin) {
-      showToast("กรุณากรอกรหัสผ่าน (PIN)", "warning");
+      showToast("กรุณากรอกรหัสผ่าน", "warning");
       return;
     }
 
@@ -33,20 +33,11 @@ export default function LoginPage() {
       if (success) {
         showToast("เข้าสู่ระบบสำเร็จ", "success");
       } else {
-        showToast("รหัสผ่านไม่ถูกต้อง หรือไม่ได้อยู่ในช่วงรหัสที่กำหนด", "error");
+        showToast("รหัสผ่านไม่ถูกต้อง", "error");
       }
     }, 500);
   };
 
-  const handleToggleMock = () => {
-    if (!scriptUrlSet) {
-      showToast("ยังไม่ได้ระบุ NEXT_PUBLIC_APPS_SCRIPT_URL ใน .env.local จะบังคับใช้โหมดจำลอง", "info");
-      return;
-    }
-    const nextMock = !mockActive;
-    setForceMockMode(nextMock);
-    showToast(nextMock ? "สลับมาใช้โหมดจำลองการทำงาน" : "สลับมาใช้โหมดบันทึกเข้า Google Sheets จริง", "success");
-  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-orange-50/50 to-orange-100/40">
@@ -55,8 +46,12 @@ export default function LoginPage() {
         <CardHeader className="text-center bg-orange-500 text-white p-8 relative">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-orange-600"></div>
           <div className="mx-auto bg-white/20 p-3 rounded-2xl w-fit mb-4">
-            <GraduationCap className="h-10 w-10 text-white" />
-          </div>
+            {/* add logo  */}
+<img
+  src="/smdlogo.jpg"
+  alt="SMD Logo"
+  className="h-45 w-45 rounded-full object-cover"
+/>          </div>
           <CardTitle className="text-2xl font-bold text-white tracking-wide">
             SMD Attendance System
           </CardTitle>
@@ -69,7 +64,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
               <Input
-                label="รหัสห้องเรียน (PIN)"
+                label="รหัสห้องเรียน"
                 type="password"
                 placeholder="กรอกรหัสห้องเรียนของคุณ"
                 value={pin}

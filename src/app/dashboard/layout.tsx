@@ -78,7 +78,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
-          <School className="h-6 w-6 text-orange-600" />
+          <img
+  src="/smdlogo.jpg"
+  alt="SMD Logo"
+  className="h-10 w-10 rounded-full object-cover"
+/>
           <div>
             <h1 className="font-bold text-orange-900 text-sm">SMD Attendance System</h1>
             <div className="text-[10px] text-gray-500 font-semibold">
@@ -155,8 +159,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="space-y-6">
           {/* Logo & Info */}
           <div className="flex items-center gap-3 px-3 py-3.5 bg-orange-50/50 rounded-2xl border border-orange-100/60">
-            <School className="h-8 w-8 text-orange-600 flex-shrink-0" />
-            <div>
+        <img
+  src="/smdlogo.jpg"
+  alt="SMD Logo"
+  className="h-20 w-20 rounded-full object-cover"
+/>            <div>
               <h1 className="font-extrabold text-orange-950 text-base leading-tight">SMD Attendance System</h1>
               <div className="text-xs text-gray-500 font-semibold mt-0.5">
                 {session.role === "admin" ? (

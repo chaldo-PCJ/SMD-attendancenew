@@ -1,5 +1,5 @@
 // Service Worker for School Attendance PWA
-const CACHE_NAME = "attendance-pwa-v2";
+const CACHE_NAME = "attendance-pwa-v3";
 const RUNTIME_CACHE = "attendance-runtime-v2";
 const ASSETS = [
   "/",
@@ -7,10 +7,7 @@ const ASSETS = [
   "/student",
   "/offline",
   "/manifest.json",
-  "/icon.svg",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
+  "/smdlogo.png",
 ];
 
 self.addEventListener("install", (e) => {
