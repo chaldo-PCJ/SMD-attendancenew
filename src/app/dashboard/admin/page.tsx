@@ -117,13 +117,15 @@ const buildHeaderMap = (headerRow: any[]): Record<string, string | null> => {
 export default function AdminPage() {
   const { session } = useAuth();
   const { showToast } = useToast();
-  
+
   const [viewMode, setViewMode] = useState<"classroom" | "all">("classroom");
   const [selectedClassroom, setSelectedClassroom] = useState<string>("2/1");
   const [loading, setLoading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [classroomStudents, setClassroomStudents] = useState<Student[]>([]);
   const [allStudents, setAllStudents] = useState<Array<Student & { classroom: string }>>([]);
-  
+
+
   // Settings
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string>("");
 
@@ -214,113 +216,143 @@ export default function AdminPage() {
   const displayedStudents = viewMode === "all" ? allStudents : classroomStudents;
   const canEditCurrentView = viewMode === "classroom";
 
-  // Bulk Excel Import
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processExcelFile = async (file: File): Promise<void> => {
+    if (loading) return;
 
     setLoading(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const data = evt.target?.result;
-        const workbook = XLSX.read(data, { type: "array" });
 
-        const importedByClassroom = new Map<string, Student[]>();
-        const skippedSheets: string[] = [];
-        const emptySheets: string[] = [];
+    // If multiple uploads happen in quick succession, ensure we don't leave the UI in a drag state.
+    setDragActive(false);
 
-        workbook.SheetNames.forEach((sheetName) => {
-          const classroom = normalizeSheetNameToClassroom(sheetName);
-          if (!classroom) {
-            skippedSheets.push(sheetName);
+
+    try {
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onerror = () => {
+          reject(new Error("Failed to read file"));
+        };
+
+        reader.onload = () => {
+          const result = reader.result;
+          if (!(result instanceof ArrayBuffer)) {
+            reject(new Error("Invalid file data"));
             return;
           }
+          resolve(result);
+        };
 
-          const sheet = workbook.Sheets[sheetName];
-          const aoa: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-          if (aoa.length < 2) {
-            emptySheets.push(sheetName);
-            return;
-          }
+        reader.readAsArrayBuffer(file);
+      });
 
-          const headerMap = buildHeaderMap(aoa[0] || []);
-          const rows = aoa.slice(1);
-          const parsedStudents = rows
-            .map((row, index) => {
-              const rowObj: Record<string, any> = {};
-              row.forEach((cellValue, cellIndex) => {
-                rowObj[XLSX.utils.encode_col(cellIndex)] = cellValue;
-              });
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
-              // Preserve named headers when available, but always keep A:D access as fallback.
-              (aoa[0] || []).forEach((header, cellIndex) => {
-                if (!header) return;
-                rowObj[String(header)] = row[cellIndex];
-              });
+      const importedByClassroom = new Map<string, Student[]>();
+      const skippedSheets: string[] = [];
+      const emptySheets: string[] = [];
 
-              return parseExcelRow(rowObj, index + 1, headerMap);
-            })
-            .filter((item): item is Student => Boolean(item))
-            .sort((a, b) => a.number - b.number);
-
-          if (parsedStudents.length > 0) {
-            importedByClassroom.set(classroom, parsedStudents);
-          } else {
-            emptySheets.push(sheetName);
-          }
-        });
-
-        if (importedByClassroom.size === 0) {
-          showToast("ไม่พบ sheet ห้องเรียนที่รองรับในไฟล์นี้", "warning");
+      workbook.SheetNames.forEach((sheetName) => {
+        const classroom = normalizeSheetNameToClassroom(sheetName);
+        if (!classroom) {
+          skippedSheets.push(sheetName);
           return;
         }
 
-        let successCount = 0;
-        const failedClassrooms: string[] = [];
-
-        for (const [classroom, parsedStudents] of importedByClassroom.entries()) {
-          const res = await api.saveStudents(classroom, parsedStudents);
-          if (res.success) {
-            successCount += 1;
-          } else {
-            failedClassrooms.push(classroom);
-          }
+        const sheet = workbook.Sheets[sheetName];
+        const aoa: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (aoa.length < 2) {
+          emptySheets.push(sheetName);
+          return;
         }
 
-        const sheetList = Array.from(importedByClassroom.keys()).join(", ");
-        const warnings = [
-          skippedSheets.length > 0 ? `ข้าม sheet: ${skippedSheets.join(", ")}` : "",
-          emptySheets.length > 0 ? `sheet ว่าง/ไม่ครบข้อมูล: ${emptySheets.join(", ")}` : "",
-          failedClassrooms.length > 0 ? `บันทึกไม่สำเร็จ: ${failedClassrooms.join(", ")}` : "",
-        ].filter(Boolean);
+        const headerMap = buildHeaderMap(aoa[0] || []);
+        const rows = aoa.slice(1);
+        const parsedStudents = rows
+          .map((row, index) => {
+            const rowObj: Record<string, any> = {};
+            row.forEach((cellValue, cellIndex) => {
+              rowObj[XLSX.utils.encode_col(cellIndex)] = cellValue;
+            });
 
-        showToast(
-          `นำเข้าข้อมูลสำเร็จ ${successCount} ห้อง (${sheetList})` +
-            (warnings.length ? ` | ${warnings.join(" | ")}` : ""),
-          failedClassrooms.length > 0 ? "warning" : "success",
-          5000
-        );
+            // Preserve named headers when available, but always keep A:D access as fallback.
+            (aoa[0] || []).forEach((header, cellIndex) => {
+              if (!header) return;
+              rowObj[String(header)] = row[cellIndex];
+            });
 
-        if (viewMode === "all") {
-          await loadAllStudents();
+            return parseExcelRow(rowObj, index + 1, headerMap);
+          })
+          .filter((item): item is Student => Boolean(item))
+          .sort((a, b) => a.number - b.number);
+
+        if (parsedStudents.length > 0) {
+          importedByClassroom.set(classroom, parsedStudents);
         } else {
-          await loadStudents();
+          emptySheets.push(sheetName);
         }
-      } catch (err) {
-        console.error(err);
-        showToast("ไฟล์ Excel รูปแบบไม่ถูกต้อง ไม่สามารถนำเข้าได้", "error");
-      } finally {
-        setLoading(false);
+      });
+
+      if (importedByClassroom.size === 0) {
+        showToast("ไม่พบ sheet ห้องเรียนที่รองรับในไฟล์นี้", "warning");
+        return;
       }
-    };
-    reader.readAsArrayBuffer(file);
-    
-    // Clear input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+
+      let successCount = 0;
+      const failedClassrooms: string[] = [];
+
+      for (const [classroom, parsedStudents] of importedByClassroom.entries()) {
+        const res = await api.saveStudents(classroom, parsedStudents);
+        if (res.success) {
+          successCount += 1;
+        } else {
+          failedClassrooms.push(classroom);
+        }
+      }
+
+      const sheetList = Array.from(importedByClassroom.keys()).join(", ");
+      const warnings = [
+        skippedSheets.length > 0 ? `ข้าม sheet: ${skippedSheets.join(", ")}` : "",
+        emptySheets.length > 0 ? `sheet ว่าง/ไม่ครบข้อมูล: ${emptySheets.join(", ")}` : "",
+        failedClassrooms.length > 0 ? `บันทึกไม่สำเร็จ: ${failedClassrooms.join(", ")}` : "",
+      ].filter(Boolean);
+
+      showToast(
+        `นำเข้าข้อมูลสำเร็จ ${successCount} ห้อง (${sheetList})` +
+          (warnings.length ? ` | ${warnings.join(" | ")}` : ""),
+        failedClassrooms.length > 0 ? "warning" : "success",
+        5000
+      );
+
+      if (viewMode === "all") {
+        await loadAllStudents();
+      } else {
+        await loadStudents();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("ไฟล์ Excel รูปแบบไม่ถูกต้อง ไม่สามารถนำเข้าได้", "error");
+    } finally {
+      setLoading(false);
+
+      // Clear input (preserve existing UX behavior)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      setDragActive(false);
     }
   };
+
+  // Bulk Excel Import (input change)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (loading) return;
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    void processExcelFile(file);
+  };
+
 
   // Push to server
   const handleSaveAll = async () => {
@@ -449,7 +481,7 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      
+
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -463,30 +495,10 @@ export default function AdminPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left column options */}
         <div className="space-y-6 lg:col-span-1">
-          
-          {/* Database Setup Card */}
-          <Card className="border-orange-100 shadow-sm bg-white">
-            <CardHeader className="bg-orange-50/50 pb-4 border-b border-orange-50">
-              <CardTitle className="text-orange-950 font-bold text-base flex items-center gap-2">
-                <Settings className="h-4.5 w-4.5 text-orange-600" />
-                ตั้งค่าระบบฐานข้อมูล
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              <Input
-                label="ลิงก์ Google Sheets (สำหรับเปิดดูแผ่นงาน)"
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                value={spreadsheetUrl}
-                onChange={(e) => setSpreadsheetUrl(e.target.value)}
-              />
-              <Button onClick={saveSpreadsheetUrl} size="sm" className="w-full font-bold">
-                บันทึกลิงก์
-              </Button>
-            </CardContent>
-          </Card>
+
 
           {/* Import Roster Card */}
           <Card className="border-orange-100 shadow-sm bg-white">
@@ -497,24 +509,88 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5 space-y-4">
-              
+
+              <CardContent className="p-5 flex flex-col gap-2">
+                <Button onClick={() => setIsAddOpen(true)} variant="outline" className="w-full text-sm font-bold border-orange-200 flex items-center justify-center gap-2">
+                  <Plus className="h-4 w-4 text-orange-600" /> เพิ่มนักเรียนแบบกำหนดเอง
+                </Button>
+              </CardContent>
+
               <div className="space-y-2">
-                <span className="text-xs font-bold text-gray-500 block">อัปโหลดไฟล์ Excel (.xlsx)</span>
+                <span className="text-xs font-bold text-gray-500 block">
+                  อัปโหลดไฟล์ Excel (.xlsx)
+                </span>
+
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!loading) setDragActive(true);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!loading) setDragActive(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragActive(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    setDragActive(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file) return;
+
+                    void processExcelFile(file);
+                  }}
+                  className={`
+                    group flex flex-col items-center justify-center gap-3
+                    border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all
+                    ${
+                      dragActive
+                        ? "border-orange-500 bg-orange-100 scale-[1.01]"
+                        : "border-orange-300 bg-orange-50/50 hover:border-orange-500 hover:bg-orange-50"
+                    }
+                  `}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <Upload className="h-6 w-6 text-orange-600" />
+                  </div>
+
+                  <div className="text-center">
+                    <p className="font-semibold text-gray-800">
+                      ลากไฟล์มาวางที่นี่
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      หรือ <span className="text-orange-600 font-semibold">คลิกเพื่อเลือกไฟล์</span>
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-gray-400">
+                    รองรับ .xlsx และ .xls
+                  </p>
+                </div>
+
                 <input
-                  type="file"
-                  accept=".xlsx, .xls"
                   ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
                   onChange={handleFileUpload}
-                  className="block w-full text-xs text-gray-500
-                    file:mr-3 file:py-2 file:px-3
-                    file:rounded-xl file:border-0
-                    file:text-xs file:font-bold
-                    file:bg-orange-50 file:text-orange-700
-                    hover:file:bg-orange-100
-                    border border-orange-200 rounded-xl cursor-pointer"
+                  className="hidden"
                 />
+
                 <p className="text-[11px] text-gray-500 leading-relaxed">
-                  รองรับไฟล์ที่มีหลาย sheet ต่อห้องเรียน โดยใช้ชื่อ sheet เช่น <strong>21</strong> = ห้อง <strong>2/1</strong>, <strong>22</strong> = ห้อง <strong>2/2</strong> และอ่านคอลัมน์ <strong>เลขประจำตัว, เลขที่, ชื่อ - สกุล, ชั้น</strong>
+                  รองรับไฟล์ที่มีหลาย Sheet ต่อห้องเรียน โดยใช้ชื่อ Sheet เช่น{" "}
+                  <strong>21</strong> = ห้อง <strong>2/1</strong>,{" "}
+                  <strong>22</strong> = ห้อง <strong>2/2</strong> และอ่านคอลัมน์{" "}
+                  <strong>เลขประจำตัว, เลขที่, ชื่อ - สกุล, ชั้น</strong>
                 </p>
               </div>
 
@@ -532,29 +608,11 @@ export default function AdminPage() {
             </CardContent>
           </Card>
 
-          {/* Manual Entry Actions */}
-          <Card className="border-orange-100 shadow-sm bg-white">
-            <CardHeader className="bg-orange-50/50 pb-4 border-b border-orange-50">
-              <CardTitle className="text-orange-950 font-bold text-base flex items-center gap-2">
-                <Plus className="h-4.5 w-4.5 text-orange-600" />
-                จัดการตารางข้อมูล
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 flex flex-col gap-2">
-              <Button onClick={() => setIsAddOpen(true)} variant="outline" className="w-full text-sm font-bold border-orange-200 flex items-center justify-center gap-2">
-                <Plus className="h-4 w-4 text-orange-600" /> เพิ่มนักเรียนแบบกำหนดเอง
-              </Button>
-              <Button onClick={() => setIsClearOpen(true)} variant="outline" className="w-full text-sm font-bold border-red-200 text-red-700 hover:bg-red-50 flex items-center justify-center gap-2">
-                <Trash2 className="h-4 w-4" /> ล้างตารางข้อมูลชั่วคราว
-              </Button>
-            </CardContent>
-          </Card>
-
         </div>
 
         {/* Right column - Main Roster list */}
         <div className="lg:col-span-2">
-          
+
           <Card className="border-orange-100 shadow-sm bg-white overflow-hidden">
             <CardHeader className="bg-orange-500/5 px-6 py-4 border-b border-orange-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -572,22 +630,20 @@ export default function AdminPage() {
                   <button
                     type="button"
                     onClick={() => setViewMode("classroom")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${
-                      viewMode === "classroom"
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${viewMode === "classroom"
                         ? "bg-orange-500 text-white shadow-sm"
                         : "text-gray-700 hover:bg-orange-50"
-                    }`}
+                      }`}
                   >
                     รายห้อง
                   </button>
                   <button
                     type="button"
                     onClick={() => setViewMode("all")}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${
-                      viewMode === "all"
+                    className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${viewMode === "all"
                         ? "bg-orange-500 text-white shadow-sm"
                         : "text-gray-700 hover:bg-orange-50"
-                    }`}
+                      }`}
                   >
                     ทุกห้อง
                   </button>
@@ -614,7 +670,7 @@ export default function AdminPage() {
             </CardHeader>
 
             <CardContent className="p-0">
-              
+
               {loading ? (
                 <div className="h-64 flex flex-col items-center justify-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500 mb-2"></div>
@@ -722,7 +778,7 @@ export default function AdminPage() {
             value={newStudent.number}
             onChange={(e) => setNewStudent({ ...newStudent, number: e.target.value })}
           />
-          
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setIsAddOpen(false)}>
               ยกเลิก

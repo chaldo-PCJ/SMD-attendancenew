@@ -1,11 +1,23 @@
-# TODO
+# TODO - Excel Upload Refactor (Admin)
 
-- [ ] วางแผนและยืนยันขอบเขตงาน: Daily Report export PDF และ Excel
-- [x] เพิ่มปุ่ม Export Excel (.xlsx) ใน `src/app/dashboard/daily-report/page.tsx`
-- [ ] Implement `exportExcel()`:
+## Step 1
+- [ ] Add `dragActive` state and implement drag/drop handlers on the drop zone.
 
-  - [ ] กรณี admin + selectedClassroom=ALL: export ตารางสรุปต่อห้อง
-  - [ ] กรณีห้องเดียว: export ตารางรายนักเรียน (เลขที่/รหัส/ชื่อ-นามสกุล/สถานะ)
-- [ ] ตั้งชื่อไฟล์ให้เหมาะสมด้วยวันที่ที่เลือก
-- [ ] รัน lint/build และทดสอบการดาวน์โหลดไฟล์
+## Step 2
+- [ ] Extract Excel parsing/import logic from `handleFileUpload()` into `processExcelFile(file: File): Promise<void>`.
+
+## Step 3
+- [ ] Refactor `handleFileUpload(e)` to only extract `file` from `e.target.files` and call `processExcelFile(file)`.
+
+## Step 4
+- [ ] Replace drag-and-drop synthetic/fake ChangeEvent creation with direct `processExcelFile(file)`.
+
+## Step 5
+- [ ] Improve TypeScript strict-mode safety in FileReader callback (no unsafe assertions, no synthetic events).
+
+## Step 6
+- [ ] Prevent uploads while `loading` is true; ensure file input reset remains.
+
+## Step 7
+- [ ] Verify build/typecheck via `npm run build` or available script.
 
