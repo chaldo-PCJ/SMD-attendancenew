@@ -494,9 +494,8 @@ export default function DailyReportPage() {
                     </TableCell>
                     <TableCell className="text-right font-bold text-gray-800">
                       {s.hasRecord ? (
-                        <span className={`px-2 py-0.5 rounded-lg ${
-                          s.percentage >= 80 ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-lg ${s.percentage >= 80 ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
+                          }`}>
                           {s.percentage}%
                         </span>
                       ) : (
@@ -536,15 +535,14 @@ export default function DailyReportPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <span
-                            className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold ${
-                              record.status === "มา"
+                            className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold ${record.status === "มา"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : record.status === "สาย"
                                   ? "bg-amber-100 text-amber-800"
                                   : record.status === "ลา"
                                     ? "bg-blue-100 text-blue-800"
                                     : "bg-red-100 text-red-800"
-                            }`}
+                              }`}
                           >
                             {record.status}
                           </span>
@@ -642,19 +640,6 @@ export default function DailyReportPage() {
             </div>
           </div>
         )}
-      </div>
-
-      <div className="print:hidden">
-        <Card className="border-orange-100 bg-orange-50/20 shadow-sm">
-          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-sm text-gray-700">
-              ใช้ปุ่ม <span className="font-bold text-orange-900">พิมพ์ / Export PDF</span> เพื่อบันทึกรายงานเป็นไฟล์ PDF
-            </div>
-            <Button variant="outline" onClick={exportPdf} className="border-orange-200">
-              <Download className="h-4 w-4" /> Export PDF
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

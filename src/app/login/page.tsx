@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login, loginStudent } = useAuth();
   const { showToast } = useToast();
-  
+
   const mockActive = isMockMode();
   const scriptUrlSet = !!getScriptUrl();
 
@@ -40,29 +40,27 @@ export default function LoginPage() {
 
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-orange-50/50 to-orange-100/40">
-
-      <Card className="max-w-md w-full shadow-md border-orange-100 hover:shadow-lg transition-shadow duration-300">
-        <CardHeader className="text-center bg-orange-500 text-white p-8 relative">
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-orange-600"></div>
-          <div className="mx-auto bg-white/20 p-3 rounded-2xl w-fit mb-4">
-            {/* add logo  */}
-<img
-  src="/smdlogo.jpg"
-  alt="SMD Logo"
-  className="h-45 w-45 rounded-full object-cover"
-/>          </div>
-          <CardTitle className="text-2xl font-bold text-white tracking-wide">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100/50">
+      <Card className="max-w-md w-full shadow-2xl border-0 ring-1 ring-gray-900/5 bg-white/90 backdrop-blur-md overflow-hidden">
+        <CardHeader className="text-center p-8 pb-4">
+          <div className="mx-auto w-fit mb-6">
+            <img
+              src="/smdlogo.jpg"
+              alt="SMD Logo"
+              className="h-30 w-30 rounded-full object-cover shadow-sm ring-1 ring-gray-900/5"
+            />
+          </div>
+          <CardTitle className="text-2xl font-bold text-gray-900 tracking-tight">
             SMD Attendance System
           </CardTitle>
-          <CardDescription className="text-orange-100 mt-1.5 font-medium text-xs">
+          <CardDescription className="text-gray-500 mt-2 font-medium text-sm">
             โรงเรียนสาธิตมหาวิทยาลัยขอนแก่น ฝ่ายมัธยมศึกษา มอดินแดง
           </CardDescription>
         </CardHeader>
-        
-        <CardContent className="p-8 space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1">
+
+        <CardContent className="p-8 pt-4 space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
               <Input
                 label="รหัสห้องเรียน"
                 type="password"
@@ -70,36 +68,36 @@ export default function LoginPage() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 disabled={loading}
-                className="text-center font-mono tracking-widest text-lg"
+                className="text-center font-mono tracking-widest text-lg h-12 bg-gray-50/50 border-gray-200 focus:bg-white transition-colors"
               />
             </div>
-            
+
             <Button
               type="submit"
-              className="w-full h-11 text-base font-semibold"
+              className="w-full h-12 text-base font-medium shadow-md hover:shadow-lg transition-all duration-300"
               loading={loading}
             >
-              <KeyRound className="h-4 w-4" /> เข้าสู่ระบบ
+              <KeyRound className="h-4 w-4 mr-2" /> เข้าสู่ระบบ
             </Button>
           </form>
 
           <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-orange-100"></div>
-            <span className="flex-shrink mx-4 text-gray-400 text-xs font-semibold">หรือ</span>
-            <div className="flex-grow border-t border-orange-100"></div>
+            <div className="flex-grow border-t border-gray-100"></div>
+            <span className="flex-shrink mx-4 text-gray-400 text-xs font-medium uppercase tracking-wider">หรือ</span>
+            <div className="flex-grow border-t border-gray-100"></div>
           </div>
 
           <Button
             type="button"
             variant="outline"
             onClick={loginStudent}
-            className="w-full h-11 border-orange-200 hover:bg-orange-50 text-orange-800 font-bold flex items-center justify-center gap-2"
+            className="w-full h-12 border-gray-200 hover:bg-gray-50 text-gray-700 font-medium flex items-center justify-center gap-2 transition-colors duration-300"
           >
-            <GraduationCap className="h-5 w-5 text-orange-600" /> ตรวจสอบสถิติการมาเรียนสำหรับนักเรียน
+            <GraduationCap className="h-5 w-5 text-gray-400" />
+            <span>ตรวจสอบสถิติการมาเรียนสำหรับนักเรียน</span>
           </Button>
         </CardContent>
       </Card>
-      
     </div>
   );
 }
