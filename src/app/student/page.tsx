@@ -58,7 +58,7 @@ export default function StudentPortalPage() {
   const [studentId, setStudentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [uniformRecords, setUniformRecords] = useState<(UniformCheckRecord & { date: string })[]>([]);
+  const [uniformRecords, setUniformRecords] = useState<(UniformCheckRecord & { date: string; classroom: string })[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
