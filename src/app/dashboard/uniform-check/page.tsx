@@ -232,7 +232,7 @@ export default function UniformCheckPage() {
               >
                 <div className="flex items-center gap-3 border-b border-orange-50 pb-3">
                   <span className="flex items-center justify-center h-10 w-10 bg-orange-100 text-orange-800 rounded-full font-bold text-sm">
-                    #{student.number}
+                    {student.number}
                   </span>
                   <div>
                     <h4 className="font-bold text-gray-800 text-base">{student.studentName}</h4>

@@ -357,8 +357,8 @@ export default function AttendancePage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <span className="flex items-center justify-center h-9 w-9 bg-orange-100 text-orange-800 rounded-full font-bold text-xs">
-                      #{student.number}
+                    <span className="flex items-center justify-center h-9 w-9 bg-orange-100 text-orange-800 rounded-full font-bold text-lg">
+                      {student.number}
                     </span>
                     <div>
                       <h4 className="font-bold text-gray-800 text-base">{student.studentName}</h4>
@@ -542,7 +542,7 @@ export default function AttendancePage() {
           <div className="flex justify-end gap-2 bg-white p-4 rounded-3xl border border-orange-100 shadow-sm">
             <Button
               onClick={handleSave}
-              disabled={loading || students.length === 0  || !allStudentsChecked}
+              disabled={loading || students.length === 0 || !allStudentsChecked}
               className="h-11 px-8 text-base font-bold rounded-full shadow-md shadow-orange-100"
               loading={loading}
             >

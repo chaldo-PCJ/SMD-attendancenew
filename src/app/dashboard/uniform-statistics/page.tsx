@@ -22,7 +22,7 @@ import {
   Target,
   Calendar,
   X,
-  Activity,
+  ListChecks,
   UserCheck,
   AlertTriangle
 } from "lucide-react";
@@ -114,7 +114,7 @@ export default function UniformStatisticsPage() {
       const checkRes = await api.getAllUniformChecks(
         classroomScope === ALL_CLASSROOMS_VALUE ? undefined : classroomScope
       );
-      
+
       if (!checkRes.success) {
         throw new Error("ไม่สามารถดึงข้อมูลการตรวจได้");
       }
@@ -168,7 +168,7 @@ export default function UniformStatisticsPage() {
   const uniformFails = filteredChecks.filter(r => !r.uniformPass).length;
   const hairFails = filteredChecks.filter(r => !r.hairPass).length;
   const nailFails = filteredChecks.filter(r => !r.nailPass).length;
-  
+
   const uniformPassRate = totalRecords > 0 ? Math.round(((totalRecords - uniformFails) / totalRecords) * 100) : 0;
   const hairPassRate = totalRecords > 0 ? Math.round(((totalRecords - hairFails) / totalRecords) * 100) : 0;
   const nailPassRate = totalRecords > 0 ? Math.round(((totalRecords - nailFails) / totalRecords) * 100) : 0;
@@ -181,11 +181,11 @@ export default function UniformStatisticsPage() {
         const studentChecks = filteredChecks.filter(
           (record) => String(record.studentId).trim() === String(student.studentId).trim()
         );
-        
+
         const uniformFail = studentChecks.filter(r => !r.uniformPass).length;
         const hairFail = studentChecks.filter(r => !r.hairPass).length;
         const nailFail = studentChecks.filter(r => !r.nailPass).length;
-        
+
         const deductions = (uniformFail * 10) + (hairFail * 10) + (nailFail * 5);
 
         return {
@@ -309,7 +309,7 @@ export default function UniformStatisticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-orange-950 flex items-center gap-2">
-            <Activity className="h-6 w-6 text-orange-600" /> สถิติเครื่องแต่งกาย
+            <ListChecks className="h-6 w-6 text-orange-600" /> สถิติเครื่องแต่งกาย
           </h2>
           <p className="text-gray-500 text-xs mt-1">
             {scopeIsAll
@@ -412,7 +412,7 @@ export default function UniformStatisticsPage() {
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card className="border-orange-100 shadow-sm rounded-3xl">
               <CardContent className="p-5 flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600">
