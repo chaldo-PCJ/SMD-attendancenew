@@ -308,9 +308,9 @@ export default function AdminPage() {
     }
 
     const importedByClassroom: Record<string, Student[]> = {};
-    for (const [cls, list] of importedMap.entries()) {
+    importedMap.forEach((list, cls) => {
       importedByClassroom[cls] = list;
-    }
+    });
 
     return { importedByClassroom, skippedSheets, emptySheets };
   };

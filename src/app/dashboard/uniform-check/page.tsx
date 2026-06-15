@@ -72,11 +72,11 @@ export default function UniformCheckPage() {
           return {
             studentId: s.studentId,
             studentName: s.name,
-            uniformPass: record?.uniformPass ?? true,
+            uniformPass: record?.uniformPass ?? null,
             uniformReason: record?.uniformReason || "",
-            hairPass: record?.hairPass ?? true,
+            hairPass: record?.hairPass ?? null,
             hairReason: record?.hairReason || "",
-            nailPass: record?.nailPass ?? true,
+            nailPass: record?.nailPass ?? null,
             nailReason: record?.nailReason || "",
             number: s.number || 99,
           };
@@ -113,6 +113,12 @@ export default function UniformCheckPage() {
 
     if (!teacherName.trim()) {
       showToast("กรุณาระบุชื่ออาจารย์ผู้ตรวจ", "warning");
+      return;
+    }
+
+    const incomplete = students.some(s => s.uniformPass === null || s.hairPass === null || s.nailPass === null);
+    if (incomplete) {
+      showToast("กรุณาตรวจเครื่องแต่งกายให้ครบทุกคนก่อนบันทึก", "warning");
       return;
     }
 
@@ -179,11 +185,11 @@ export default function UniformCheckPage() {
 
             <div className="w-full md:w-64 space-y-1.5">
               <label className="text-sm font-semibold text-gray-700 block">
-                อาจารย์ผู้ตรวจ
+                อาจารย์ผู้ตรวจ *
               </label>
               <input
                 type="text"
-                placeholder="ระบุชื่ออาจารย์"
+                placeholder="ระบุชื่ออาจารย์ *"
                 value={teacherName}
                 onChange={(e) => setTeacherName(e.target.value)}
                 disabled={!editable}
@@ -244,35 +250,47 @@ export default function UniformCheckPage() {
                 <div className="space-y-2 pt-1">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold text-gray-700">1. การแต่งกาย</span>
-                    <div className="flex gap-1 bg-gray-100 p-1 rounded-full">
+                    <div className="relative flex items-center p-1 rounded-full w-32 bg-gray-100">
+                      <div
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-all duration-300 ease-in-out ${student.uniformPass === true
+                          ? 'bg-emerald-500 translate-x-0 left-1 opacity-100'
+                          : student.uniformPass === false
+                            ? 'bg-red-500 translate-x-[calc(100%+4px)] left-1 opacity-100'
+                            : 'opacity-0 left-1'
+                          }`}
+                      />
                       <button
                         disabled={!editable}
                         onClick={() => {
                           updateStudent(student.studentId, 'uniformPass', true);
                           updateStudent(student.studentId, 'uniformReason', '');
                         }}
-                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all ${student.uniformPass ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                        className={`relative z-10 w-1/2 text-xs font-bold py-1.5 transition-colors duration-300 ${student.uniformPass === true ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                          }`}
                       >
                         ผ่าน
                       </button>
                       <button
                         disabled={!editable}
                         onClick={() => updateStudent(student.studentId, 'uniformPass', false)}
-                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all ${!student.uniformPass ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                        className={`relative z-10 w-1/2 text-xs font-bold py-1.5 transition-colors duration-300 ${student.uniformPass === false ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                          }`}
                       >
                         ไม่ผ่าน
                       </button>
                     </div>
                   </div>
-                  {!student.uniformPass && (
-                    <input
-                      type="text"
-                      placeholder="ระบุสาเหตุที่ไม่ผ่าน..."
-                      disabled={!editable}
-                      value={student.uniformReason}
-                      onChange={(e) => updateStudent(student.studentId, 'uniformReason', e.target.value)}
-                      className="w-full text-sm p-2 border border-red-200 rounded-xl bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-400"
-                    />
+                  {student.uniformPass === false && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                      <input
+                        type="text"
+                        placeholder="ระบุสาเหตุที่ไม่ผ่าน..."
+                        disabled={!editable}
+                        value={student.uniformReason}
+                        onChange={(e) => updateStudent(student.studentId, 'uniformReason', e.target.value)}
+                        className="w-full text-sm p-2 border border-red-200 rounded-xl bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-400 transition-all"
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -280,35 +298,47 @@ export default function UniformCheckPage() {
                 <div className="space-y-2 pt-1 border-t border-gray-50">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold text-gray-700">2. ทรงผม</span>
-                    <div className="flex gap-1 bg-gray-100 p-1 rounded-full">
+                    <div className="relative flex items-center p-1 rounded-full w-32 bg-gray-100">
+                      <div
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-all duration-300 ease-in-out ${student.hairPass === true
+                          ? 'bg-emerald-500 translate-x-0 left-1 opacity-100'
+                          : student.hairPass === false
+                            ? 'bg-red-500 translate-x-[calc(100%+4px)] left-1 opacity-100'
+                            : 'opacity-0 left-1'
+                          }`}
+                      />
                       <button
                         disabled={!editable}
                         onClick={() => {
                           updateStudent(student.studentId, 'hairPass', true);
                           updateStudent(student.studentId, 'hairReason', '');
                         }}
-                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all ${student.hairPass ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                        className={`relative z-10 w-1/2 text-xs font-bold py-1.5 transition-colors duration-300 ${student.hairPass === true ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                          }`}
                       >
                         ผ่าน
                       </button>
                       <button
                         disabled={!editable}
                         onClick={() => updateStudent(student.studentId, 'hairPass', false)}
-                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all ${!student.hairPass ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                        className={`relative z-10 w-1/2 text-xs font-bold py-1.5 transition-colors duration-300 ${student.hairPass === false ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                          }`}
                       >
                         ไม่ผ่าน
                       </button>
                     </div>
                   </div>
-                  {!student.hairPass && (
-                    <input
-                      type="text"
-                      placeholder="ระบุสาเหตุที่ไม่ผ่าน..."
-                      disabled={!editable}
-                      value={student.hairReason}
-                      onChange={(e) => updateStudent(student.studentId, 'hairReason', e.target.value)}
-                      className="w-full text-sm p-2 border border-red-200 rounded-xl bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-400"
-                    />
+                  {student.hairPass === false && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                      <input
+                        type="text"
+                        placeholder="ระบุสาเหตุที่ไม่ผ่าน..."
+                        disabled={!editable}
+                        value={student.hairReason}
+                        onChange={(e) => updateStudent(student.studentId, 'hairReason', e.target.value)}
+                        className="w-full text-sm p-2 border border-red-200 rounded-xl bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-400 transition-all"
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -316,35 +346,47 @@ export default function UniformCheckPage() {
                 <div className="space-y-2 pt-1 border-t border-gray-50">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold text-gray-700">3. เล็บมือ</span>
-                    <div className="flex gap-1 bg-gray-100 p-1 rounded-full">
+                    <div className="relative flex items-center p-1 rounded-full w-32 bg-gray-100">
+                      <div
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-all duration-300 ease-in-out ${student.nailPass === true
+                          ? 'bg-emerald-500 translate-x-0 left-1 opacity-100'
+                          : student.nailPass === false
+                            ? 'bg-red-500 translate-x-[calc(100%+4px)] left-1 opacity-100'
+                            : 'opacity-0 left-1'
+                          }`}
+                      />
                       <button
                         disabled={!editable}
                         onClick={() => {
                           updateStudent(student.studentId, 'nailPass', true);
                           updateStudent(student.studentId, 'nailReason', '');
                         }}
-                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all ${student.nailPass ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                        className={`relative z-10 w-1/2 text-xs font-bold py-1.5 transition-colors duration-300 ${student.nailPass === true ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                          }`}
                       >
                         ผ่าน
                       </button>
                       <button
                         disabled={!editable}
                         onClick={() => updateStudent(student.studentId, 'nailPass', false)}
-                        className={`px-3 py-1 text-xs font-bold rounded-full transition-all ${!student.nailPass ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                        className={`relative z-10 w-1/2 text-xs font-bold py-1.5 transition-colors duration-300 ${student.nailPass === false ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                          }`}
                       >
                         ไม่ผ่าน
                       </button>
                     </div>
                   </div>
-                  {!student.nailPass && (
-                    <input
-                      type="text"
-                      placeholder="ระบุสาเหตุที่ไม่ผ่าน..."
-                      disabled={!editable}
-                      value={student.nailReason}
-                      onChange={(e) => updateStudent(student.studentId, 'nailReason', e.target.value)}
-                      className="w-full text-sm p-2 border border-red-200 rounded-xl bg-red-50 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                    />
+                  {student.nailPass === false && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                      <input
+                        type="text"
+                        placeholder="ระบุสาเหตุที่ไม่ผ่าน..."
+                        disabled={!editable}
+                        value={student.nailReason}
+                        onChange={(e) => updateStudent(student.studentId, 'nailReason', e.target.value)}
+                        className="w-full text-sm p-2 border border-red-200 rounded-xl bg-red-50 focus:outline-none focus:ring-1 focus:ring-amber-400 transition-all"
+                      />
+                    </div>
                   )}
                 </div>
               </div>

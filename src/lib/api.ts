@@ -21,12 +21,13 @@ export interface AttendanceRecord {
 export interface UniformCheckRecord {
   studentId: string;
   studentName: string;
-  uniformPass: boolean;
+  uniformPass: boolean | null;
   uniformReason?: string;
-  hairPass: boolean;
+  hairPass: boolean | null;
   hairReason?: string;
-  nailPass: boolean;
+  nailPass: boolean | null;
   nailReason?: string;
+  number?: number;
 }
 
 export const isMockMode = (): boolean => {
