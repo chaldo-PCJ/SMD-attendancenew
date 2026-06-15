@@ -409,20 +409,20 @@ export default function StatisticsPage() {
           },
           callbacks: isStudentScope
             ? {
-                title: (context: any) => {
-                  const index = context[0].dataIndex;
-                  const item = studentAnalytics[index];
-                  return item ? `${item.number}. ${item.studentName}` : context[0].label;
-                },
-                label: (context: any) => `อัตราเข้าเรียน: ${context.raw}%`,
-              }
-            : {
-                label: (context: any) => {
-                  const index = context.dataIndex;
-                  const item = classroomSummaries[index];
-                  return item && item.hasData ? `อัตราเข้าเรียน: ${context.raw}%` : "ยังไม่มีข้อมูลเช็คชื่อ";
-                },
+              title: (context: any) => {
+                const index = context[0].dataIndex;
+                const item = studentAnalytics[index];
+                return item ? `${item.number}. ${item.studentName}` : context[0].label;
               },
+              label: (context: any) => `อัตราเข้าเรียน: ${context.raw}%`,
+            }
+            : {
+              label: (context: any) => {
+                const index = context.dataIndex;
+                const item = classroomSummaries[index];
+                return item && item.hasData ? `อัตราเข้าเรียน: ${context.raw}%` : "ยังไม่มีข้อมูลเช็คชื่อ";
+              },
+            },
         },
       },
     };
@@ -473,7 +473,7 @@ export default function StatisticsPage() {
       },
       {
         label: "วันบันทึกที่พบ",
-          value: `${uniqueDates} วัน`,
+        value: `${uniqueDates} วัน`,
         icon: CheckCircle2,
         tone: "blue",
       },
@@ -781,7 +781,7 @@ export default function StatisticsPage() {
                   วิเคราะห์รายนักเรียน
                 </CardTitle>
                 <CardDescription className="text-xs font-semibold text-gray-500">
-                  ตารางนี้ช่วยให้คุณครูเห็นนักเรียนที่มีแนวโน้มขาดเรียนหรือมาสายสะสมจากข้อมูลที่บันทึกแล้ว
+                  ตารางนี้ช่วยให้อาจารย์เห็นนักเรียนที่มีแนวโน้มขาดเรียนหรือมาสายสะสมจากข้อมูลที่บันทึกแล้ว
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -814,13 +814,12 @@ export default function StatisticsPage() {
                           <td className="px-4 py-3 text-center text-gray-700 font-semibold">{item.total}</td>
                           <td className="px-4 py-3 text-right">
                             <span
-                              className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold ${
-                                item.attendanceRate >= 80
+                              className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold ${item.attendanceRate >= 80
                                   ? "bg-emerald-50 text-emerald-700"
                                   : item.attendanceRate >= 60
                                     ? "bg-amber-50 text-amber-700"
                                     : "bg-red-50 text-red-700"
-                              }`}
+                                }`}
                             >
                               {item.attendanceRate}%
                             </span>
@@ -910,9 +909,8 @@ export default function StatisticsPage() {
                             <td className="px-4 py-3 text-right font-bold">
                               {item.hasData ? (
                                 <span
-                                  className={`px-2 py-0.5 rounded-lg ${
-                                    item.percentage >= 80 ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
-                                  }`}
+                                  className={`px-2 py-0.5 rounded-lg ${item.percentage >= 80 ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
+                                    }`}
                                 >
                                   {item.percentage}%
                                 </span>

@@ -25,7 +25,7 @@ interface ClassroomCheckStatus {
 
 export default function TeacherStatusPage() {
   const { showToast } = useToast();
-  
+
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -65,7 +65,7 @@ export default function TeacherStatusPage() {
     return CLASSROOMS.map((cls) => {
       const clsRecords = records.filter((r) => r.classroom === cls);
       const checked = clsRecords.length > 0;
-      
+
       let time: string | null = null;
       if (checked && clsRecords[0].timestamp) {
         try {
@@ -104,7 +104,7 @@ export default function TeacherStatusPage() {
 
   return (
     <div className="space-y-6">
-      
+
       {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -120,7 +120,7 @@ export default function TeacherStatusPage() {
       {/* Date Select & Filter controls */}
       <Card className="border-orange-100 shadow-sm bg-white">
         <CardContent className="p-5 flex flex-col md:flex-row items-end justify-between gap-4">
-          
+
           <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
             {/* Date selector */}
             <div className="w-56 space-y-1.5">
@@ -136,11 +136,10 @@ export default function TeacherStatusPage() {
             {/* Filter Toggle Button */}
             <button
               onClick={() => setFilterPendingOnly(!filterPendingOnly)}
-              className={`h-10 px-4 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 active:scale-[0.98] ${
-                filterPendingOnly
+              className={`h-10 px-4 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 active:scale-[0.98] ${filterPendingOnly
                   ? "bg-orange-500 border-orange-600 text-white shadow-sm"
                   : "bg-white border-orange-200 text-gray-700 hover:bg-orange-50"
-              }`}
+                }`}
             >
               <Filter className="h-4 w-4" />
               <span>แสดงเฉพาะห้องที่ยังไม่เช็ค ({summary.pending})</span>
@@ -188,7 +187,7 @@ export default function TeacherStatusPage() {
           <CardContent className="p-8 text-center flex flex-col items-center justify-center gap-3">
             <CheckCircle2 className="h-10 w-10 text-emerald-500" />
             <div>
-              <h3 className="font-bold text-orange-950 text-base">คุณครูทุกห้องส่งเช็คชื่อครบถ้วนแล้ว!</h3>
+              <h3 className="font-bold text-orange-950 text-base">อาจารย์ทุกห้องส่งเช็คชื่อครบถ้วนแล้ว!</h3>
               <p className="text-gray-500 text-xs mt-1">
                 การเช็คชื่อรอบเช้าเสร็จสมบูรณ์เรียบร้อยแล้ว
               </p>
@@ -200,11 +199,10 @@ export default function TeacherStatusPage() {
           {filteredList.map((item) => (
             <div
               key={item.classroom}
-              className={`p-4 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] transition-all hover:-translate-y-0.5 duration-150 ${
-                item.checked
+              className={`p-4 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] transition-all hover:-translate-y-0.5 duration-150 ${item.checked
                   ? "bg-emerald-50/20 border-emerald-100 text-emerald-950"
                   : "bg-white border-orange-100 text-gray-800"
-              }`}
+                }`}
             >
               <div>
                 <span className="text-xs font-bold text-gray-500 block">ห้องเรียน</span>

@@ -96,7 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   ผู้ดูแลระบบ <Crown className="h-3 w-3 fill-amber-500" />
                 </span>
               ) : (
-                `คุณครูห้อง ${session.classroomLock}`
+                `อาจารย์ประจำชั้นห้อง ${session.classroomLock}`
               )}
             </div>
           </div>
