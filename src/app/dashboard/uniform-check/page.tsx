@@ -397,8 +397,13 @@ export default function UniformCheckPage() {
           <div className="flex justify-end gap-2 bg-white p-4 rounded-3xl border border-orange-100 shadow-sm sticky bottom-4">
             <Button
               onClick={handleSave}
-              disabled={loading || students.length === 0}
-              className="h-11 px-8 text-base font-bold rounded-full shadow-md shadow-orange-100"
+              disabled={
+                loading || 
+                students.length === 0 || 
+                !teacherName.trim() || 
+                students.some(s => s.uniformPass === null || s.hairPass === null || s.nailPass === null)
+              }
+              className="h-11 px-8 text-base font-bold rounded-full shadow-md shadow-orange-100 disabled:opacity-50"
               loading={loading}
             >
               <Save className="h-4.5 w-4.5" /> บันทึกข้อมูล
