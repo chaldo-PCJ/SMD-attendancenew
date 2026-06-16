@@ -51,25 +51,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const router = useRouter();
   const pathname = usePathname();
 
-  // Load session from sessionStorage on mount
+  // Load session from localStorage on mount
   useEffect(() => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       
-      if (data.session) {
-        const storedRole = sessionStorage.getItem("auth_role") as UserRole;
-        const storedPin = sessionStorage.getItem("auth_pin");
-        const storedLock = sessionStorage.getItem("auth_lock");
+      if (data.session && data.session.user?.email) {
+        const email = data.session.user.email;
+        const pinFromEmail = email.split('@')[0].toUpperCase();
 
-        if (storedRole) {
+        if (pinFromEmail.startsWith("ADMIN_")) {
           setSession({
-            role: storedRole,
-            pin: storedPin,
-            classroomLock: storedLock,
+            role: "admin",
+            pin: pinFromEmail,
+            classroomLock: null,
           });
+        } else {
+          const classroomLock = validateTeacherPin(pinFromEmail);
+          if (classroomLock) {
+            setSession({
+              role: "teacher",
+              pin: pinFromEmail,
+              classroomLock: classroomLock,
+            });
+          } else {
+            await supabase.auth.signOut();
+            setSession({ role: null, pin: null, classroomLock: null });
+          }
         }
       } else {
-        const storedRole = sessionStorage.getItem("auth_role") as UserRole;
+        const storedRole = localStorage.getItem("auth_role") as UserRole;
         if (storedRole === "student") {
           setSession({
             role: "student",
@@ -77,9 +88,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             classroomLock: null,
           });
         } else {
-          sessionStorage.removeItem("auth_role");
-          sessionStorage.removeItem("auth_pin");
-          sessionStorage.removeItem("auth_lock");
+          localStorage.removeItem("auth_role");
+          localStorage.removeItem("auth_pin");
+          localStorage.removeItem("auth_lock");
         }
       }
       setIsLoading(false);
@@ -136,9 +147,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         classroomLock: null,
       };
       setSession(adminSession);
-      sessionStorage.setItem("auth_role", "admin");
-      sessionStorage.setItem("auth_pin", trimmedPin);
-      sessionStorage.removeItem("auth_lock");
       router.push("/dashboard/attendance");
       return true;
     }
@@ -152,9 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         classroomLock,
       };
       setSession(teacherSession);
-      sessionStorage.setItem("auth_role", "teacher");
-      sessionStorage.setItem("auth_pin", trimmedPin);
-      sessionStorage.setItem("auth_lock", classroomLock);
       router.push("/dashboard/attendance");
       return true;
     }
@@ -170,18 +175,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       classroomLock: null,
     };
     setSession(studentSession);
-    sessionStorage.setItem("auth_role", "student");
-    sessionStorage.removeItem("auth_pin");
-    sessionStorage.removeItem("auth_lock");
+    localStorage.setItem("auth_role", "student");
+    localStorage.removeItem("auth_pin");
+    localStorage.removeItem("auth_lock");
     router.push("/student");
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
     setSession({ role: null, pin: null, classroomLock: null });
-    sessionStorage.removeItem("auth_role");
-    sessionStorage.removeItem("auth_pin");
-    sessionStorage.removeItem("auth_lock");
+    localStorage.removeItem("auth_role");
+    localStorage.removeItem("auth_pin");
+    localStorage.removeItem("auth_lock");
     router.push("/login");
   };
 
