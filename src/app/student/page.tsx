@@ -217,36 +217,16 @@ export default function StudentPortalPage() {
   }, [selectedDate, records, uniformRecords]);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-orange-100">
+    <div className="min-h-screen bg-white font-sans selection:bg-orange-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         <div className="space-y-8">
 
-          {/* ─── Header ─── */}
-          <header className="sticky top-4 z-30 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/90 backdrop-blur-lg border border-slate-200 rounded-2xl px-5 py-4 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-              <div className="h-11 w-11 rounded-xl bg-orange-500 flex items-center justify-center shrink-0">
-                <GraduationCap className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-semibold text-slate-900 leading-tight">ระบบสืบค้นข้อมูลนักเรียน</h1>
-                <p className="text-sm text-slate-500 leading-tight">ตรวจสอบประวัติการเข้าเรียนและการแต่งกาย</p>
-              </div>
-            </div>
-            <button
-              onClick={logout}
-              className="flex items-center justify-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-4 py-2.5 rounded-xl transition-all w-full sm:w-auto shrink-0"
-            >
-              <LogOut className="h-4 w-4" />
-              กลับหน้าแรก
-            </button>
-          </header>
-
           {/* ─── Search ─── */}
-          <div className="max-w-xl mx-auto w-full">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
+          <div className="max-w-6xl mx-auto w-full">
+            <div className="bg-white border border-slate-100 rounded-2xl p-6 sm:p-8 shadow-sm">
               <form onSubmit={handleSearch} className="space-y-4">
                 <div className="text-center">
-                  <div className="inline-flex h-12 w-12 rounded-xl bg-orange-50 border border-orange-100 items-center justify-center mb-3">
+                  <div className="inline-flex h-12 w-12 rounded-xl bg-white border border-slate-200 items-center justify-center mb-3">
                     <Search className="h-5 w-5 text-orange-500" />
                   </div>
                   <h2 className="text-base font-semibold text-slate-900">ค้นหาข้อมูลนักเรียน</h2>
@@ -290,7 +270,7 @@ export default function StudentPortalPage() {
           {/* ─── Empty State: Welcome ─── */}
           {!loading && !hasSearched && (
             <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-              <div className="h-16 w-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center mb-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
+              <div className="h-16 w-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center mb-5 shadow-sm">
                 <UserCircle className="h-7 w-7 text-slate-400" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900">ยินดีต้อนรับสู่ระบบสืบค้นข้อมูล</h3>
@@ -301,7 +281,7 @@ export default function StudentPortalPage() {
           {/* ─── Empty State: Not Found ─── */}
           {!loading && hasSearched && !studentInfo && (
             <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-              <div className="h-16 w-16 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-center mb-5">
+              <div className="h-16 w-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center mb-5">
                 <AlertCircle className="h-7 w-7 text-red-400" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900">ไม่พบข้อมูลนักเรียน</h3>
@@ -324,7 +304,7 @@ export default function StudentPortalPage() {
             <div className="space-y-6 animate-fade-in">
 
               {/* ── Profile & Attendance Rate ── */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-sm">
                 {/* Avatar */}
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
@@ -344,208 +324,14 @@ export default function StudentPortalPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Attendance Rate */}
-                <div className="flex items-center gap-4 sm:gap-6 shrink-0 border-t sm:border-t-0 sm:border-l border-slate-100 pt-4 sm:pt-0 sm:pl-6">
-                  <div className="text-center">
-                    <div className="text-3xl sm:text-4xl font-bold text-slate-900 leading-none">{stats.rate}%</div>
-                    <div className="text-xs font-medium text-slate-500 mt-1">อัตราการเข้าเรียน</div>
-                  </div>
-                  <div className="hidden sm:flex flex-col items-center">
-                    <div className="relative h-14 w-14">
-                      <svg className="absolute inset-0" viewBox="0 0 36 36">
-                        <path
-                          className="stroke-slate-100"
-                          fill="none"
-                          strokeWidth="3"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        />
-                        <path
-                          className={`${getRateColor(stats.rate)}`}
-                          fill="none"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeDasharray={`${stats.rate}, 100`}
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          style={{ stroke: stats.rate >= 80 ? "#10b981" : stats.rate >= 60 ? "#f59e0b" : "#ef4444" }}
-                        />
-                      </svg>
-                    </div>
-                    <div className="text-[10px] font-medium text-slate-400 mt-1 whitespace-nowrap">{stats.total} ครั้ง</div>
-                  </div>
-                  <div className="sm:hidden text-xs font-medium text-slate-400 whitespace-nowrap">จาก {stats.total} ครั้ง</div>
-                </div>
               </div>
 
-              {/* ── Statistics KPI Cards ── */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                {[
-                  { label: "มาเรียน", value: stats.present, icon: CheckCircle2, color: "emerald", bg: "bg-emerald-50 text-emerald-600", border: "border-emerald-100" },
-                  { label: "มาสาย", value: stats.late, icon: Clock, color: "amber", bg: "bg-amber-50 text-amber-600", border: "border-amber-100" },
-                  { label: "ลา", value: stats.leave, icon: CalendarCheck, color: "blue", bg: "bg-blue-50 text-blue-600", border: "border-blue-100" },
-                  { label: "ขาด", value: stats.absent, icon: CalendarX, color: "red", bg: "bg-red-50 text-red-600", border: "border-red-100" }
-                ].map((stat, i) => {
-                  const Icon = stat.icon;
-                  return (
-                    <div
-                      key={i}
-                      className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col items-center text-center gap-2 hover:-translate-y-0.5 transition-all duration-200 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]"
-                    >
-                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${stat.bg} ${stat.border} border`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="text-2xl sm:text-3xl font-bold text-slate-900 leading-none">{stat.value}</div>
-                      <div className="text-xs font-medium text-slate-500">{stat.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
 
-              {/* ── Uniform Stats ── */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-semibold text-slate-900">สถิติการตรวจระเบียบวินัย</h3>
-                  </div>
-                  <span className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                    ตรวจทั้งหมด {uniformStats.total} ครั้ง
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                  {/* Uniform */}
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
-                        <Shirt className="h-4 w-4 text-slate-600" />
-                      </div>
-                      <div>
-                        <div className={`text-lg font-semibold ${getRateColor(uniformStats.uniformRate)}`}>{uniformStats.uniformRate}%</div>
-                        <div className="text-xs font-medium text-slate-500">ระเบียบวินัย</div>
-                      </div>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${getProgressColor(uniformStats.uniformRate)} transition-all`} style={{ width: `${Math.min(uniformStats.uniformRate, 100)}%` }} />
-                    </div>
-                  </div>
-                  {/* Hair */}
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
-                        <Scissors className="h-4 w-4 text-slate-600" />
-                      </div>
-                      <div>
-                        <div className={`text-lg font-semibold ${getRateColor(uniformStats.hairRate)}`}>{uniformStats.hairRate}%</div>
-                        <div className="text-xs font-medium text-slate-500">ทรงผม</div>
-                      </div>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${getProgressColor(uniformStats.hairRate)} transition-all`} style={{ width: `${Math.min(uniformStats.hairRate, 100)}%` }} />
-                    </div>
-                  </div>
-                  {/* Nails */}
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
-                        <Hand className="h-4 w-4 text-slate-600" />
-                      </div>
-                      <div>
-                        <div className={`text-lg font-semibold ${getRateColor(uniformStats.nailRate)}`}>{uniformStats.nailRate}%</div>
-                        <div className="text-xs font-medium text-slate-500">เล็บ</div>
-                      </div>
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${getProgressColor(uniformStats.nailRate)} transition-all`} style={{ width: `${Math.min(uniformStats.nailRate, 100)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Calendar & Chart ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* Calendar */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
-                  <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-100">
-                    <Calendar className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-semibold text-slate-900">ปฏิทินการเข้าเรียน</h3>
-                  </div>
-                  <div className="flex flex-col md:flex-row gap-6">
-                    <div className="flex-1 flex justify-center custom-calendar-wrapper">
-                      <DayPicker
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        modifiers={calendarModifiers}
-                        modifiersClassNames={calendarModifierClassNames}
-                        locale={th}
-                        className="bg-slate-50 p-3 rounded-xl border border-slate-100 w-full"
-                      />
-                    </div>
-                    <div className="flex-1 flex flex-col gap-3 min-h-[160px]">
-                      <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">รายละเอียดประจำวัน</h4>
-                      {selectedDayInfo ? (
-                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-4 flex-1">
-                          <p className="text-sm font-semibold text-orange-600 border-b border-slate-200 pb-2">{selectedDayInfo.formatted}</p>
-
-                          {/* Attendance Info */}
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">การเข้าเรียน</p>
-                            {selectedDayInfo.attendance.length > 0 ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {selectedDayInfo.attendance.map((a, i) => (
-                                  <span key={i} className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(a.status)}`}>
-                                    {statusBadgeLabel(a.status)}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-slate-400">ไม่มีข้อมูลการเช็คชื่อ</p>
-                            )}
-                          </div>
-
-                          {/* Uniform Info */}
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">การตรวจระเบียบวินัย</p>
-                            {selectedDayInfo.uniform.length > 0 ? (
-                              <div className="space-y-2">
-                                {selectedDayInfo.uniform.map((u, i) => (
-                                  <div key={i} className="bg-white p-2.5 rounded-lg border border-slate-100 text-xs space-y-1.5">
-                                    <div className="flex justify-between">
-                                      <span className="font-medium text-slate-600 flex items-center gap-1.5"><Shirt className="h-3 w-3" /> ระเบียบวินัย</span>
-                                      <span className={u.uniformPass ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>{u.uniformPass ? "ผ่าน" : `ไม่ผ่าน (${u.uniformReason || "-"})`}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="font-medium text-slate-600 flex items-center gap-1.5"><Scissors className="h-3 w-3" /> ทรงผม</span>
-                                      <span className={u.hairPass ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>{u.hairPass ? "ผ่าน" : `ไม่ผ่าน (${u.hairReason || "-"})`}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="font-medium text-slate-600 flex items-center gap-1.5"><Hand className="h-3 w-3" /> เล็บ</span>
-                                      <span className={u.nailPass ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>{u.nailPass ? "ผ่าน" : `ไม่ผ่าน (${u.nailReason || "-"})`}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-slate-400">ไม่มีข้อมูลการตรวจ</p>
-                            )}
-                          </div>
-
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-100 border-dashed">
-                          <p className="text-xs font-medium text-slate-400">คลิกวันที่บนปฏิทินเพื่อดูข้อมูล</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Chart */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_0_rgb(0,0,0,0.04)]">
+{/* Chart */}
+                <div className="bg-white border border-slate-100 rounded-2xl p-6 sm:p-8 shadow-sm">
                   <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-100">
                     <CheckCircle2 className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-semibold text-slate-900">สัดส่วนการมาเรียน</h3>
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">สัดส่วนการมาเรียน</h3>
                   </div>
                   <div className="flex flex-col items-center gap-6">
                     <div className="relative h-44 w-44">
@@ -594,6 +380,149 @@ export default function StudentPortalPage() {
                     </div>
                   </div>
                 </div>
+          
+
+
+              {/* ── Calendar & Chart ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Calendar */}
+                <div className="bg-white border border-slate-100 rounded-2xl p-6 sm:p-8 shadow-sm">
+                  <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-100">
+                    <Calendar className="h-4 w-4 text-orange-500" />
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">ปฏิทินการเข้าเรียน</h3>
+                  </div>
+                  <div className="flex flex-col md:flex-row gap-6">
+                    <div className="flex-1 flex justify-center custom-calendar-wrapper">
+                      <DayPicker
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        modifiers={calendarModifiers}
+                        modifiersClassNames={calendarModifierClassNames}
+                        locale={th}
+                        className="bg-slate-50 p-3 rounded-xl border border-slate-100 w-full"
+                      />
+                    </div>
+                    <div className="flex-1 flex flex-col gap-3 min-h-[160px]">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">รายละเอียดประจำวัน</h4>
+                      {selectedDayInfo ? (
+                        <div className="bg-white rounded-xl p-4 border border-slate-100 space-y-4 flex-1">
+                          <p className="text-sm font-semibold text-orange-500 border-b border-slate-200 pb-2">{selectedDayInfo.formatted}</p>
+
+                          {/* Attendance Info */}
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">การเข้าเรียน</p>
+                            {selectedDayInfo.attendance.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {selectedDayInfo.attendance.map((a, i) => (
+                                  <span key={i} className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass(a.status)}`}>
+                                    {statusBadgeLabel(a.status)}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-400">ไม่มีข้อมูลการเช็คชื่อ</p>
+                            )}
+                          </div>
+
+                          {/* Uniform Info */}
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">การตรวจระเบียบวินัย</p>
+                            {selectedDayInfo.uniform.length > 0 ? (
+                              <div className="space-y-2">
+                                {selectedDayInfo.uniform.map((u, i) => (
+                                  <div key={i} className="bg-white p-2.5 rounded-xl border border-slate-100 text-xs space-y-1.5">
+                                    <div className="flex justify-between">
+                                      <span className="font-medium text-slate-600 flex items-center gap-1.5"><Shirt className="h-3 w-3" /> ระเบียบวินัย</span>
+                                      <span className={u.uniformPass ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>{u.uniformPass ? "ผ่าน" : `ไม่ผ่าน (${u.uniformReason || "-"})`}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="font-medium text-slate-600 flex items-center gap-1.5"><Scissors className="h-3 w-3" /> ทรงผม</span>
+                                      <span className={u.hairPass ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>{u.hairPass ? "ผ่าน" : `ไม่ผ่าน (${u.hairReason || "-"})`}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="font-medium text-slate-600 flex items-center gap-1.5"><Hand className="h-3 w-3" /> เล็บ</span>
+                                      <span className={u.nailPass ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>{u.nailPass ? "ผ่าน" : `ไม่ผ่าน (${u.nailReason || "-"})`}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-400">ไม่มีข้อมูลการตรวจ</p>
+                            )}
+                          </div>
+
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center bg-white rounded-xl border border-slate-100 border-dashed">
+                          <p className="text-xs font-medium text-slate-400">คลิกวันที่บนปฏิทินเพื่อดูข้อมูล</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+
+                  {/* ── Uniform Stats ── */}
+              <div className="bg-white border border-slate-100 rounded-2xl p-6 sm:p-8 shadow-sm">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-orange-500" />
+                    <h3 className="text-sm font-semibold text-slate-900">สถิติการตรวจระเบียบวินัย</h3>
+                  </div>
+                  <span className="text-xs font-medium text-slate-400 bg-white border border-slate-200 px-2.5 py-1 rounded-lg">
+                    ตรวจทั้งหมด {uniformStats.total} ครั้ง
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  {/* Uniform */}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <Shirt className="h-4 w-4 text-slate-600" />
+                      </div>
+                      <div>
+                        <div className={`text-lg font-semibold ${getRateColor(uniformStats.uniformRate)}`}>{uniformStats.uniformRate}%</div>
+                        <div className="text-xs font-medium text-slate-500">ระเบียบวินัย</div>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${getProgressColor(uniformStats.uniformRate)} transition-all`} style={{ width: `${Math.min(uniformStats.uniformRate, 100)}%` }} />
+                    </div>
+                  </div>
+                  {/* Hair */}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <Scissors className="h-4 w-4 text-slate-600" />
+                      </div>
+                      <div>
+                        <div className={`text-lg font-semibold ${getRateColor(uniformStats.hairRate)}`}>{uniformStats.hairRate}%</div>
+                        <div className="text-xs font-medium text-slate-500">ทรงผม</div>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${getProgressColor(uniformStats.hairRate)} transition-all`} style={{ width: `${Math.min(uniformStats.hairRate, 100)}%` }} />
+                    </div>
+                  </div>
+                  {/* Nails */}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <Hand className="h-4 w-4 text-slate-600" />
+                      </div>
+                      <div>
+                        <div className={`text-lg font-semibold ${getRateColor(uniformStats.nailRate)}`}>{uniformStats.nailRate}%</div>
+                        <div className="text-xs font-medium text-slate-500">เล็บ</div>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${getProgressColor(uniformStats.nailRate)} transition-all`} style={{ width: `${Math.min(uniformStats.nailRate, 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               </div>
             </div>
@@ -605,7 +534,6 @@ export default function StudentPortalPage() {
       <style jsx global>{`
         .custom-calendar-wrapper .rdp {
           --rdp-accent-color: #f97316;
-          --rdp-background-color: #fff7ed;
           margin: 0;
           width: 100%;
         }
