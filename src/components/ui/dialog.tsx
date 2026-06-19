@@ -53,6 +53,12 @@ export const Dialog: React.FC<DialogProps> = ({
         <div className="my-4 text-sm text-gray-600">
           {children}
         </div>
+
+        {footer && (
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

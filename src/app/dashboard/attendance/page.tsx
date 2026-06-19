@@ -9,13 +9,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Save, Calendar as CalendarIcon, ExternalLink, RefreshCw, AlertCircle, ClipboardCheck } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import { Save, Calendar as CalendarIcon, ExternalLink, RefreshCw, AlertCircle, ClipboardCheck, ArrowRight } from "lucide-react";
 
 interface AttendanceState {
   studentId: string;
   studentName: string;
   number: number;
   status: "มา" | "สาย" | "ลา" | "ขาด" | null;
+}
+
+interface StatusChange {
+  studentId: string;
+  studentName: string;
+  number: number;
+  oldStatus: "มา" | "สาย" | "ลา" | "ขาด" | null;
+  newStatus: "มา" | "สาย" | "ลา" | "ขาด" | null;
 }
 
 export default function AttendancePage() {
@@ -41,6 +50,9 @@ export default function AttendancePage() {
   const [students, setStudents] = useState<AttendanceState[]>([]);
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string>("");
   const [checkedStudentIds, setCheckedStudentIds] = useState<Set<string>>(new Set());
+  const [originalStatuses, setOriginalStatuses] = useState<Map<string, "มา" | "สาย" | "ลา" | "ขาด" | null>>(new Map());
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<StatusChange[]>([]);
   const isTeacher = session.role === "teacher";
   const activeClassroom = selectedClassroom;
 
@@ -110,6 +122,13 @@ export default function AttendancePage() {
         })
         .sort((a, b) => a.number - b.number);
 
+      // Store original statuses for change tracking
+      const statusMap = new Map<string, "มา" | "สาย" | "ลา" | "ขาด" | null>();
+      mappedStudents.forEach((s) => {
+        statusMap.set(s.studentId, s.status);
+      });
+      setOriginalStatuses(statusMap);
+      
       setStudents(mappedStudents);
       setCheckedStudentIds(new Set(records.map((r) => String(r.studentId))));
 
@@ -142,6 +161,68 @@ export default function AttendancePage() {
       next.add(studentId);
       return next;
     });
+  };
+
+  // Check for changes and show confirmation modal
+  const handleSaveClick = () => {
+    if (students.length === 0) {
+      showToast("ไม่มีข้อมูลนักเรียนสำหรับบันทึก", "warning");
+      return;
+    }
+
+    if (!allStudentsChecked) {
+      showToast("กรุณาเช็กสถานะนักเรียนให้ครบทุกคนก่อนบันทึก", "warning");
+      return;
+    }
+
+    // Detect changes
+    const changes: StatusChange[] = [];
+    students.forEach((student) => {
+      const originalStatus = originalStatuses.get(student.studentId);
+      if (student.status !== originalStatus) {
+        changes.push({
+          studentId: student.studentId,
+          studentName: student.studentName,
+          number: student.number,
+          oldStatus: originalStatus || null,
+          newStatus: student.status,
+        });
+      }
+    });
+
+    if (changes.length > 0) {
+      setPendingChanges(changes);
+      setShowConfirmModal(true);
+    } else {
+      // No changes, proceed with save
+      performSave();
+    }
+  };
+
+  const performSave = async () => {
+    setLoading(true);
+    try {
+      const payload = students.map((s) => ({
+        studentId: s.studentId,
+        studentName: s.studentName,
+        number: s.number,
+        status: s.status as "มา" | "สาย" | "ลา" | "ขาด",
+      }));
+
+      const res = await api.saveAttendance(selectedClassroom, selectedDate, payload);
+      if (res.success) {
+        showToast(`บันทึกข้อมูลการเช็คชื่อของห้อง ${selectedClassroom} ประจำวันที่ ${selectedDate} สำเร็จ!`, "success", 0, "modal");
+        // Reload to get fresh timestamp
+        loadData();
+      } else {
+        throw new Error("การบันทึกล้มเหลว");
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const {
@@ -216,6 +297,21 @@ export default function AttendancePage() {
     }
   };
 
+  const getStatusColor = (status: "มา" | "สาย" | "ลา" | "ขาด" | null) => {
+    switch (status) {
+      case "มา":
+        return "bg-emerald-100 text-emerald-700";
+      case "สาย":
+        return "bg-amber-100 text-amber-700";
+      case "ลา":
+        return "bg-blue-100 text-blue-700";
+      case "ขาด":
+        return "bg-red-100 text-red-700";
+      default:
+        return "bg-gray-100 text-gray-500";
+    }
+  };
+
   return (
     <div className="space-y-6 font-sans">
 
@@ -259,32 +355,41 @@ export default function AttendancePage() {
               />
             </div>
 
-            <div className="w-full md:w-56 space-y-1.5">
+            <div className="w-full md:w-56 space-y-1.5 min-w-0 flex-shrink">
               <label className="text-sm font-semibold text-gray-700 block">
                 วันที่บันทึกการเช็คชื่อ
               </label>
 
-              <input
-                type="date"
-                value={selectedDate}
-                max={todayDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="
+              <div className="relative w-full">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  max={todayDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="
       h-11
       w-full
       rounded-full
       border
       border-orange-200
       bg-white
-      px-4
-      text-base
+      px-2
+      pr-8
+      text-xs
+      sm:text-sm
       text-gray-700
       focus:outline-none
       focus:ring-2
       focus:ring-orange-300
       focus:border-orange-400
+      overflow-hidden
+      text-overflow:ellipsis
+      whitespace-nowrap
+      min-w-0
     "
-              />
+                />
+                <CalendarIcon className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-400 pointer-events-none shrink-0" />
+              </div>
             </div>
             <div className="w-full md:w-auto flex gap-2">
               {selectedDate !== todayDate && (
@@ -540,7 +645,7 @@ export default function AttendancePage() {
           {/* Save Bar */}
           <div className="flex justify-end gap-2 bg-white p-4 rounded-3xl border border-orange-100 shadow-sm">
             <Button
-              onClick={handleSave}
+              onClick={handleSaveClick}
               disabled={loading || students.length === 0 || !allStudentsChecked}
               className="h-11 px-8 text-base font-bold rounded-full shadow-md shadow-orange-100"
               loading={loading}
@@ -548,6 +653,64 @@ export default function AttendancePage() {
               <Save className="h-4.5 w-4.5" /> บันทึกการเข้าแถว
             </Button>
           </div>
+
+          {/* Confirmation Modal */}
+          <Dialog
+            isOpen={showConfirmModal}
+            onClose={() => setShowConfirmModal(false)}
+            title="ยืนยันการแก้ไขข้อมูล"
+            description="รายการต่อไปนี้มีการเปลี่ยนแปลงสถานะการเช็คชื่อ"
+            footer={
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowConfirmModal(false)}
+                  disabled={loading}
+                  className="px-4 h-10 rounded-full border-orange-200"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    performSave();
+                  }}
+                  disabled={loading}
+                  className="px-4 h-10 rounded-full bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  ยืนยันการบันทึก
+                </Button>
+              </div>
+            }
+          >
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {pendingChanges.map((change, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center justify-center h-8 w-8 bg-orange-200 text-orange-800 rounded-full font-bold text-sm">
+                      {change.number}
+                    </span>
+                    <div>
+                      <div className="font-bold text-gray-800 text-sm">{change.studentName}</div>
+                      <div className="text-xs text-gray-500 font-mono">{change.studentId}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className={`px-2 py-1 rounded-lg font-bold ${getStatusColor(change.oldStatus)}`}>
+                      {change.oldStatus || "ไม่มีข้อมูล"}
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-orange-500" />
+                    <span className={`px-2 py-1 rounded-lg font-bold ${getStatusColor(change.newStatus)}`}>
+                      {change.newStatus || "ไม่มีข้อมูล"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Dialog>
 
         </div>
       )}

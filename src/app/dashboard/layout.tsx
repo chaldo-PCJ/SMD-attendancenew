@@ -72,10 +72,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-orange-50/10">
+    <div className="min-h-screen flex flex-col xl:flex-row bg-orange-50/10 overflow-x-hidden">
 
-      {/* Mobile Navbar */}
-      <header className="md:hidden bg-white border-b border-orange-100 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+      {/* Mobile/Tablet Navbar */}
+      <header className="xl:hidden bg-white border-b border-orange-100 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -110,17 +110,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      {/* Mobile Menu Backdrop */}
+      {/* Mobile/Tablet Menu Backdrop */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm xl:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
-      {/* Mobile Drawer */}
+      {/* Mobile/Tablet Drawer */}
       <nav
-        className={`fixed top-[53px] bottom-0 left-0 w-64 bg-white border-r border-orange-100 z-30 transform transition-transform duration-300 md:hidden flex flex-col justify-between ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        className={`fixed top-[53px] bottom-0 left-0 w-64 bg-white border-r border-orange-100 z-30 transform transition-transform duration-300 xl:hidden flex flex-col justify-between ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
       >
         <div className="px-3 py-4 space-y-1">
@@ -158,7 +158,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </nav>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col justify-between w-64 bg-white border-r border-orange-100 sticky top-0 h-screen p-4 flex-shrink-0 shadow-sm">
+      <aside className="hidden xl:flex flex-col justify-between w-64 bg-white border-r border-orange-100 sticky top-0 h-screen p-4 flex-shrink-0 shadow-sm">
         <div className="space-y-6">
           {/* Logo & Info */}
           <div className="flex items-center gap-3 px-3 py-3.5 bg-orange-50/50 rounded-2xl border border-orange-100/60">
@@ -221,7 +221,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
+      <main className="flex-grow p-4 md:p-8 w-full overflow-y-auto">
         {children}
       </main>
     </div>
