@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
-import { api, AttendanceRecord, UniformCheckRecord } from "@/lib/api";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { api, AttendanceRecord, UniformCheckRecord, getDeductionSettings } from "@/lib/api";
+import { getLatePenaltySettings } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,9 @@ export default function StudentPortalPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [foundStudent, setFoundStudent] = useState<{ name: string; classroom: string; id: string } | null>(null);
+  const [latePenaltySettings, setLatePenaltySettings] = useState<{ lateThreshold: number; penaltyPoints: number }>({ lateThreshold: 3, penaltyPoints: 5 });
+  const [latePenaltyPoints, setLatePenaltyPoints] = useState(0);
+  const [uniformPenaltyPoints, setUniformPenaltyPoints] = useState(0);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +81,12 @@ export default function StudentPortalPage() {
     setSelectedDate(undefined);
     setFoundStudent(null);
     try {
+      // Load penalty settings first
+      const settingsRes = await getLatePenaltySettings();
+      if (settingsRes.success && settingsRes.settings) {
+        setLatePenaltySettings(settingsRes.settings);
+      }
+
       const studentsRes = await api.getAllStudents();
 
       const match = studentsRes.success
@@ -120,6 +130,25 @@ export default function StudentPortalPage() {
       setUniformRecords(filteredUni);
       setHasSearched(true);
 
+      // Calculate late penalty points
+      const lateCount = filteredAtt.filter(r => r.status === "สาย").length;
+      if (lateCount > 0 && latePenaltySettings.lateThreshold > 0 && latePenaltySettings.penaltyPoints > 0) {
+        const penaltyCount = Math.max(0, lateCount - latePenaltySettings.lateThreshold);
+        setLatePenaltyPoints(penaltyCount * latePenaltySettings.penaltyPoints);
+      } else {
+        setLatePenaltyPoints(0);
+      }
+
+      // Calculate uniform penalty points
+      const deductionSettings = getDeductionSettings();
+      let uniformTotal = 0;
+      filteredUni.forEach(u => {
+        if (u.uniformPass === false) uniformTotal += deductionSettings.uniformDeduction;
+        if (u.hairPass === false) uniformTotal += deductionSettings.hairDeduction;
+        if (u.nailPass === false) uniformTotal += deductionSettings.nailDeduction;
+      });
+      setUniformPenaltyPoints(uniformTotal);
+
       if (filteredAtt.length === 0 && filteredUni.length === 0 && !match) {
         showToast("ไม่พบประวัติของรหัสนี้", "info");
       } else if (filteredAtt.length === 0 && filteredUni.length === 0) {
@@ -133,7 +162,7 @@ export default function StudentPortalPage() {
     } finally {
       setLoading(false);
     }
-  }, [studentId, showToast]);
+  }, [studentId, showToast, latePenaltySettings]);
 
   const studentInfo = useMemo(() => {
     if (records.length > 0) return { name: records[0].studentName, classroom: records[0].classroom, id: records[0].studentId };
@@ -154,6 +183,27 @@ export default function StudentPortalPage() {
     const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
     return { present, late, leave, absent, total, rate };
   }, [records]);
+
+  // Recalculate penalty when records or settings change
+  useEffect(() => {
+    const lateCount = records.filter(r => r.status === "สาย").length;
+    if (lateCount > 0 && latePenaltySettings.lateThreshold > 0 && latePenaltySettings.penaltyPoints > 0) {
+      const penaltyCount = Math.max(0, lateCount - latePenaltySettings.lateThreshold);
+      setLatePenaltyPoints(penaltyCount * latePenaltySettings.penaltyPoints);
+    } else {
+      setLatePenaltyPoints(0);
+    }
+
+    // Calculate uniform penalty points
+    const deductionSettings = getDeductionSettings();
+    let uniformTotal = 0;
+    uniformRecords.forEach(u => {
+      if (u.uniformPass === false) uniformTotal += deductionSettings.uniformDeduction;
+      if (u.hairPass === false) uniformTotal += deductionSettings.hairDeduction;
+      if (u.nailPass === false) uniformTotal += deductionSettings.nailDeduction;
+    });
+    setUniformPenaltyPoints(uniformTotal);
+  }, [records, latePenaltySettings, uniformRecords]);
 
   const uniformStats = useMemo(() => {
     let uniformPass = 0, hairPass = 0, nailPass = 0;
@@ -335,12 +385,12 @@ export default function StudentPortalPage() {
               </div>
 
 
-              {/* Chart */}
-              <div className="bg-white border border-slate-100 rounded-2xl p-6 sm:p-8 shadow-sm">
-                <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-100">
-                  <CheckCircle2 className="h-4 w-4 text-orange-500" />
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">สัดส่วนการมาเข้าแถว</h3>
-                </div>
+               {/* Chart */}
+               <div className="bg-white border border-slate-100 rounded-2xl p-6 sm:p-8 shadow-sm">
+                 <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-100">
+                   <CheckCircle2 className="h-4 w-4 text-orange-500" />
+                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">สัดส่วนการมาเข้าแถว</h3>
+                 </div>
                 <div className="flex flex-col items-center gap-6">
                   <div className="relative h-44 w-44">
                     {stats.total > 0 ? (
@@ -393,7 +443,35 @@ export default function StudentPortalPage() {
                 </div>
               </div>
 
-
+              {/* ── Penalty Summary ── */}
+              {(latePenaltyPoints > 0 || uniformPenaltyPoints > 0) && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-3">
+                  <div className="flex items-center gap-2 pb-3 border-b border-red-200">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    <h3 className="text-sm font-bold text-red-800">คะแนนที่หัก</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {latePenaltyPoints > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-red-700">คะแนนที่หักจากการมาสาย</span>
+                        <span className="text-sm font-bold text-red-800">-{latePenaltyPoints} คะแนน</span>
+                      </div>
+                    )}
+                    {uniformPenaltyPoints > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-red-700">คะแนนที่หักจากการตรวจระเบียบวินัย</span>
+                        <span className="text-sm font-bold text-red-800">-{uniformPenaltyPoints} คะแนน</span>
+                      </div>
+                    )}
+                    {(latePenaltyPoints > 0 && uniformPenaltyPoints > 0) && (
+                      <div className="flex items-center justify-between pt-2 border-t border-red-200">
+                        <span className="text-sm font-bold text-red-800">รวมคะแนนที่หักทั้งหมด</span>
+                        <span className="text-base font-extrabold text-red-900">-{latePenaltyPoints + uniformPenaltyPoints} คะแนน</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* ── Calendar & Chart ── */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { api, Student, DeductionSettings } from "@/lib/api";
+import { api, Student, DeductionSettings, LatePenaltySettings } from "@/lib/api";
+import { getLatePenaltySettings, saveLatePenaltySettings } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import {
   Upload, Plus, Trash2, Download, RefreshCw, FileSpreadsheet,
   Settings, AlertTriangle, Scale, Gauge, ChevronDown, ChevronRight,
   Search, Users, BookOpen, ClipboardList, GraduationCap, X, Pencil, Save,
-  History, Clock
+  History, Clock, AlarmClock
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -170,6 +171,11 @@ export default function AdminPage() {
   const [isDeductionOpen, setIsDeductionOpen] = useState(false);
   const [editDeductionSettings, setEditDeductionSettings] = useState<DeductionSettings>({ uniformDeduction: 10, hairDeduction: 10, nailDeduction: 5 });
 
+  // Late penalty settings (load from database on mount)
+  const [latePenaltySettings, setLatePenaltySettings] = useState<LatePenaltySettings>({ lateThreshold: 3, penaltyPoints: 5 });
+  const [isLatePenaltyOpen, setIsLatePenaltyOpen] = useState(false);
+  const [editLatePenaltySettings, setEditLatePenaltySettings] = useState<LatePenaltySettings>({ lateThreshold: 3, penaltyPoints: 5 });
+
   // Load deduction settings from database
   const loadDeductionSettings = useCallback(async () => {
     try {
@@ -182,9 +188,22 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Load late penalty settings from database
+  const loadLatePenaltySettings = useCallback(async () => {
+    try {
+      const res = await getLatePenaltySettings();
+      if (res.success && res.settings) {
+        setLatePenaltySettings(res.settings);
+      }
+    } catch (err) {
+      console.error("Error loading late penalty settings:", err);
+    }
+  }, []);
+
   useEffect(() => {
     loadDeductionSettings();
-  }, [loadDeductionSettings]);
+    loadLatePenaltySettings();
+  }, [loadDeductionSettings, loadLatePenaltySettings]);
 
   const openDeductionDialog = () => {
     setEditDeductionSettings({ ...deductionSettings });
@@ -220,6 +239,41 @@ export default function AdminPage() {
     }
   };
 
+  // Late penalty handlers
+  const openLatePenaltyDialog = () => {
+    setEditLatePenaltySettings({ ...latePenaltySettings });
+    setIsLatePenaltyOpen(true);
+  };
+
+  const handleSaveLatePenaltySettings = async () => {
+    const s = editLatePenaltySettings;
+    if (s.lateThreshold < 1 || s.penaltyPoints < 0) {
+      showToast("ค่าตั้งค่าต้องเป็นตัวเลขมากกว่าหรือเท่ากับ 0 (หักครั้งละต้องมากกว่า 0)", "warning");
+      return;
+    }
+    const res = await saveLatePenaltySettings(s);
+    if (res.success) {
+      setLatePenaltySettings(s);
+      showToast("บันทึกการตั้งค่าการหักคะแนนมาสายเรียบร้อย", "success");
+      setIsLatePenaltyOpen(false);
+    } else {
+      showToast(res.message || "เกิดข้อผิดพลาดในการบันทึก", "error");
+    }
+  };
+
+  const handleResetLatePenaltySettings = async () => {
+    const defaults: LatePenaltySettings = { lateThreshold: 3, penaltyPoints: 5 };
+    const res = await saveLatePenaltySettings(defaults);
+    if (res.success) {
+      setLatePenaltySettings(defaults);
+      setEditLatePenaltySettings(defaults);
+      showToast("รีเซ็ตการตั้งค่าการหักคะแนนมาสายเป็นค่ามาตรฐานแล้ว", "success");
+      setIsLatePenaltyOpen(false);
+    } else {
+      showToast(res.message || "เกิดข้อผิดพลาดในการรีเซ็ต", "error");
+    }
+  };
+
   // Modals & Forms
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newStudent, setNewStudent] = useState({ studentId: "", name: "", number: "", classroom: "2/1" });
@@ -242,6 +296,7 @@ export default function AdminPage() {
   const [accordionImport, setAccordionImport] = useState(false);
   const [accordionLegacy, setAccordionLegacy] = useState(false);
   const [accordionDeduction, setAccordionDeduction] = useState(false);
+  const [accordionLatePenalty, setAccordionLatePenalty] = useState(false);
   const [accordionDanger, setAccordionDanger] = useState(false);
 
   // Legacy import state
@@ -904,7 +959,35 @@ export default function AdminPage() {
               </div>
             </AccordionSection>
 
-            {/* Accordion 3: Danger Zone */}
+            {/* Accordion 4: Late Penalty Settings */}
+            <AccordionSection
+              title="ตั้งค่าการหักคะแนนมาสาย"
+              icon={<AlarmClock className="h-4 w-4" />}
+              isOpen={accordionLatePenalty}
+              onToggle={() => setAccordionLatePenalty(!accordionLatePenalty)}
+            >
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-medium">หักคะแนนเมื่อสาย</span>
+                    <span className="font-bold text-amber-600">ทุก {latePenaltySettings.lateThreshold} ครั้ง</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-medium">จำนวนคะแนนที่หัก</span>
+                    <span className="font-bold text-amber-600">-{latePenaltySettings.penaltyPoints} คะแนน</span>
+                  </div>
+                </div>
+                <Button
+                  onClick={openLatePenaltyDialog}
+                  size="sm"
+                  className="w-full text-xs font-bold rounded-xl bg-amber-500 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                >
+                  <Gauge className="h-3 w-3" /> แก้ไข
+                </Button>
+              </div>
+            </AccordionSection>
+
+            {/* Accordion 5: Danger Zone */}
             <AccordionSection
               title="แก้ไขข้อมูลสำคัญ"
               icon={<AlertTriangle className="h-4 w-4" />}
@@ -1511,6 +1594,24 @@ export default function AdminPage() {
             <div className="flex gap-3">
               <Button variant="outline" size="md" onClick={() => setIsDeductionOpen(false)} className="px-6 py-2.5">ยกเลิก</Button>
               <Button size="md" onClick={handleSaveDeductionSettings} className="px-6 py-2.5 font-bold">บันทึกการตั้งค่า</Button>
+            </div>
+          </div>
+        </Dialog>
+
+        {/* Late Penalty Settings Dialog */}
+        <Dialog isOpen={isLatePenaltyOpen} onClose={() => setIsLatePenaltyOpen(false)} title="แก้ไขค่าการหักคะแนนมาสาย" description="กำหนดจำนวนครั้งที่มาสายที่จะหักคะแนน และจำนวนคะแนนที่หัก">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <Input label="หักคะแนนเมื่อสายครบ (ครั้ง)" type="number" min={1} value={editLatePenaltySettings.lateThreshold.toString()} onChange={(e) => setEditLatePenaltySettings({ ...editLatePenaltySettings, lateThreshold: Math.max(1, parseInt(e.target.value) || 1) })} />
+              <Input label="จำนวนคะแนนที่หัก (ต่อครั้ง)" type="number" min={0} value={editLatePenaltySettings.penaltyPoints.toString()} onChange={(e) => setEditLatePenaltySettings({ ...editLatePenaltySettings, penaltyPoints: Math.max(0, parseInt(e.target.value) || 0) })} />
+            </div>
+            <p className="text-xs text-gray-500">ค่าเริ่มต้น: หักทุก 3 ครั้ง, หัก 5 คะแนนต่อครั้ง</p>
+          </div>
+          <div className="flex justify-between gap-3 pt-4">
+            <Button variant="outline" size="md" onClick={handleResetLatePenaltySettings} className="px-5 py-2.5">รีเซ็ตเป็นค่าเริ่มต้น</Button>
+            <div className="flex gap-3">
+              <Button variant="outline" size="md" onClick={() => setIsLatePenaltyOpen(false)} className="px-6 py-2.5">ยกเลิก</Button>
+              <Button size="md" onClick={handleSaveLatePenaltySettings} className="px-6 py-2.5 font-bold">บันทึกการตั้งค่า</Button>
             </div>
           </div>
         </Dialog>

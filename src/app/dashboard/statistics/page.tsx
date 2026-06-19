@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api, AttendanceRecord, Student } from "@/lib/api";
+import { getLatePenaltySettings } from "@/lib/api";
 import {
   CLASSROOMS,
   ALL_CLASSROOMS_VALUE,
@@ -80,6 +81,7 @@ interface StudentAnalytics {
   absent: number;
   total: number;
   attendanceRate: number;
+  latePenaltyPoints: number;
 }
 
 const statusConfig = [
@@ -151,6 +153,7 @@ export default function StatisticsPage() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>("all");
+  const [latePenaltySettings, setLatePenaltySettings] = useState<{ lateThreshold: number; penaltyPoints: number }>({ lateThreshold: 3, penaltyPoints: 5 });
 
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -166,6 +169,17 @@ export default function StatisticsPage() {
   const isAdmin = session.role === "admin";
   const scopeIsAll = selectedClassroom === ALL_CLASSROOMS_VALUE;
   const effectiveClassroom = isAdmin ? selectedClassroom : session.classroomLock || "2/1";
+
+  // Load late penalty settings
+  useEffect(() => {
+    const loadSettings = async () => {
+      const res = await getLatePenaltySettings();
+      if (res.success && res.settings) {
+        setLatePenaltySettings(res.settings);
+      }
+    };
+    loadSettings();
+  }, []);
 
   useEffect(() => {
     if (session.role === "admin") {
@@ -335,6 +349,15 @@ export default function StatisticsPage() {
         const total = records.length;
         const attendanceRate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
 
+        // Calculate late penalty points
+        // ถ้ามาสายครบ threshold ครั้ง (เช่น 3 ครั้ง) ครั้งต่อไปคือครั้งที่ 4 จะหักคะแนน
+        // ครั้งที่ 5 ก็หักอีก 5 คะแนน (รวม 10) ไปเรื่อยๆ
+        let latePenaltyPoints = 0;
+        if (late > 0 && latePenaltySettings.lateThreshold > 0 && latePenaltySettings.penaltyPoints > 0) {
+          const penaltyCount = Math.max(0, late - latePenaltySettings.lateThreshold);
+          latePenaltyPoints = penaltyCount * latePenaltySettings.penaltyPoints;
+        }
+
         return {
           studentId: student.studentId,
           studentName: student.name,
@@ -345,9 +368,10 @@ export default function StatisticsPage() {
           absent,
           total,
           attendanceRate,
+          latePenaltyPoints,
         };
       });
-  }, [filteredAttendance, scopeIsAll, students]);
+  }, [filteredAttendance, scopeIsAll, students, latePenaltySettings]);
 
   // Sorted student analytics
   const sortedStudentAnalytics = useMemo(() => {
@@ -930,6 +954,7 @@ export default function StatisticsPage() {
                         <SortHeader label="ขาด" sortKey="absent" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
                         <SortHeader label="รวมวัน" sortKey="total" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
                         <SortHeader label="% เข้าแถว" sortKey="attendanceRate" currentSort={studentSort} onSort={handleStudentSort} className="text-right" />
+                        <SortHeader label="หักคะแนน" sortKey="latePenaltyPoints" currentSort={studentSort} onSort={handleStudentSort} className="text-right" />
                       </tr>
                     </thead>
                     <tbody>
@@ -956,6 +981,15 @@ export default function StatisticsPage() {
                             >
                               {item.attendanceRate}%
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {item.latePenaltyPoints > 0 ? (
+                              <span className="inline-flex rounded-lg px-2 py-0.5 text-xs font-bold bg-red-50 text-red-700">
+                                -{item.latePenaltyPoints}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </td>
                         </tr>
                       ))}

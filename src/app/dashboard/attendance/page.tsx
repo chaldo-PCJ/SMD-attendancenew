@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/api";
+import { api, getLatePenaltySettings } from "@/lib/api";
 import { CLASSROOMS, classroomOptions } from "@/lib/classrooms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -45,7 +45,6 @@ export default function AttendancePage() {
   const activeClassroom = selectedClassroom;
 
   const todayDate = useMemo(() => getTodayDate(), []);
-
 
 
   // Keep attendance aligned with the actual current day so each new day starts from a blank slate.
@@ -182,7 +181,6 @@ export default function AttendancePage() {
 
   // Save attendance
   const handleSave = async () => {
-
     if (students.length === 0) {
       showToast("ไม่มีข้อมูลนักเรียนสำหรับบันทึก", "warning");
       return;

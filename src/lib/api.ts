@@ -493,6 +493,11 @@ export interface DeductionSettings {
   nailDeduction: number;
 }
 
+export interface LatePenaltySettings {
+  lateThreshold: number;
+  penaltyPoints: number;
+}
+
 const DEFAULT_DEDUCTION_SETTINGS: DeductionSettings = {
   uniformDeduction: 10,
   hairDeduction: 10,
@@ -538,5 +543,171 @@ export const resetDeductionSettings = (): boolean => {
   } catch (e) {
     console.error("Error resetting deduction settings:", e);
     return false;
+  }
+};
+
+// ===== Late Penalty Settings (Database-backed) =====
+
+const DEFAULT_LATE_PENALTY_SETTINGS: LatePenaltySettings = {
+  lateThreshold: 3,
+  penaltyPoints: 5,
+};
+
+export const getLatePenaltySettings = async (): Promise<{ success: boolean; settings: LatePenaltySettings | null }> => {
+  try {
+    const { data, error } = await supabase
+      .from('late_penalty_settings')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return { success: true, settings: null };
+      }
+      console.error("Error fetching late penalty settings:", error);
+      return { success: false, settings: null };
+    }
+
+    if (!data) {
+      return { success: true, settings: null };
+    }
+
+    return {
+      success: true,
+      settings: {
+        lateThreshold: data.late_threshold ?? DEFAULT_LATE_PENALTY_SETTINGS.lateThreshold,
+        penaltyPoints: data.penalty_points ?? DEFAULT_LATE_PENALTY_SETTINGS.penaltyPoints,
+      },
+    };
+  } catch (err) {
+    console.error("Error getting late penalty settings:", err);
+    return { success: false, settings: null };
+  }
+};
+
+export const saveLatePenaltySettings = async (settings: LatePenaltySettings): Promise<{ success: boolean; message: string }> => {
+  try {
+    const { error: deleteError } = await supabase
+      .from('late_penalty_settings')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+
+    if (deleteError && deleteError.code !== 'PGRST116') {
+      console.error("Error deleting old late penalty settings:", deleteError);
+    }
+
+    const { error: insertError } = await supabase
+      .from('late_penalty_settings')
+      .insert({
+        late_threshold: settings.lateThreshold,
+        penalty_points: settings.penaltyPoints,
+      });
+
+    if (insertError) {
+      console.error("Error inserting late penalty settings:", insertError);
+      return { success: false, message: "ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้" };
+    }
+
+    return { success: true, message: "บันทึกการตั้งค่าการหักคะแนนมาสายเรียบร้อย" };
+  } catch (err) {
+    console.error("Error saving late penalty settings:", err);
+    return { success: false, message: "เกิดข้อผิดพลาดในการบันทึก" };
+  }
+};
+
+export const getLateCountForStudent = async (
+  studentId: string,
+  classroom: string,
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; lateCount: number }> => {
+  try {
+    let query = supabase
+      .from('attendance')
+      .select('*', { count: 'exact', head: true })
+      .eq('student_id', studentId)
+      .eq('classroom', classroom)
+      .eq('status', 'สาย');
+
+    if (startDate) {
+      query = query.gte('date', startDate);
+    }
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    const { count, error } = await query;
+
+    if (error) {
+      console.error("Error counting late attendance:", error);
+      return { success: false, lateCount: 0 };
+    }
+
+    return { success: true, lateCount: count || 0 };
+  } catch (err) {
+    console.error("Error getting late count for student:", err);
+    return { success: false, lateCount: 0 };
+  }
+};
+
+// ===== Late Penalty Calculation (for statistics) =====
+
+export const calculateLatePenaltyForStudent = async (
+  studentId: string,
+  classroom: string,
+  startDate?: string,
+  endDate?: string
+): Promise<{ success: boolean; lateCount: number; penaltyPoints: number }> => {
+  try {
+    // Get late count from attendance
+    let query = supabase
+      .from('attendance')
+      .select('*', { count: 'exact', head: true })
+      .eq('student_id', studentId)
+      .eq('classroom', classroom)
+      .eq('status', 'สาย');
+
+    if (startDate) {
+      query = query.gte('date', startDate);
+    }
+    if (endDate) {
+      query = query.lte('date', endDate);
+    }
+
+    const { count: lateCount, error: countError } = await query;
+
+    if (countError) {
+      console.error("Error counting late attendance:", countError);
+      return { success: false, lateCount: 0, penaltyPoints: 0 };
+    }
+
+    const actualLateCount = lateCount || 0;
+
+    // Get penalty settings
+    const settingsRes = await getLatePenaltySettings();
+    if (!settingsRes.success || !settingsRes.settings) {
+      return { success: true, lateCount: actualLateCount, penaltyPoints: 0 };
+    }
+
+    const { lateThreshold, penaltyPoints } = settingsRes.settings;
+
+    // Calculate how many times penalty should be applied
+    if (lateThreshold <= 0 || penaltyPoints <= 0) {
+      return { success: true, lateCount: actualLateCount, penaltyPoints: 0 };
+    }
+
+    const penaltyCount = Math.floor(actualLateCount / lateThreshold);
+    const totalPenaltyPoints = penaltyCount * penaltyPoints;
+
+    return {
+      success: true,
+      lateCount: actualLateCount,
+      penaltyPoints: totalPenaltyPoints,
+    };
+  } catch (err) {
+    console.error("Error calculating late penalty:", err);
+    return { success: false, lateCount: 0, penaltyPoints: 0 };
   }
 };
