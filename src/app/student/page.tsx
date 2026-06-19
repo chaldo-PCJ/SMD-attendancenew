@@ -357,10 +357,14 @@ export default function StudentPortalPage() {
                         <p className="text-sm text-slate-400 font-medium">ไม่มีข้อมูล</p>
                       </div>
                     )}
-                    {stats.total > 0 && (
+                    {stats.total > 0 ? (
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                         <span className="text-2xl font-bold text-slate-900">{stats.rate}%</span>
                         <span className="text-[11px] font-medium text-slate-500">มาเข้าแถว</span>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-lg font-bold text-slate-400">ไม่พบข้อมูล</span>
                       </div>
                     )}
                   </div>
@@ -480,7 +484,7 @@ export default function StudentPortalPage() {
                       <h3 className="text-sm font-semibold text-slate-900">สถิติการตรวจระเบียบวินัย</h3>
                     </div>
                     <span className="text-xs font-medium text-slate-400 bg-white border border-slate-200 px-2.5 py-1 rounded-lg">
-                      ตรวจทั้งหมด {uniformStats.total} ครั้ง
+                      {uniformStats.total === 0 ? "ไม่พบข้อมูล" : `ตรวจทั้งหมด ${uniformStats.total} ครั้ง`}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -491,7 +495,9 @@ export default function StudentPortalPage() {
                           <Shirt className="h-4 w-4 text-slate-600" />
                         </div>
                         <div>
-                          <div className={`text-lg font-semibold ${getRateColor(uniformStats.uniformRate)}`}>{uniformStats.uniformRate}%</div>
+                          <div className={`text-lg font-semibold ${uniformStats.total === 0 ? "text-slate-400" : getRateColor(uniformStats.uniformRate)}`}>
+                        {uniformStats.total === 0 ? "ไม่พบข้อมูล" : `${uniformStats.uniformRate}%`}
+                      </div>
                           <div className="text-xs font-medium text-slate-500">การแต่งกาย</div>
                         </div>
                       </div>
@@ -506,7 +512,9 @@ export default function StudentPortalPage() {
                           <Scissors className="h-4 w-4 text-slate-600" />
                         </div>
                         <div>
-                          <div className={`text-lg font-semibold ${getRateColor(uniformStats.hairRate)}`}>{uniformStats.hairRate}%</div>
+                          <div className={`text-lg font-semibold ${uniformStats.total === 0 ? "text-slate-400" : getRateColor(uniformStats.hairRate)}`}>
+                        {uniformStats.total === 0 ? "ไม่พบข้อมูล" : `${uniformStats.hairRate}%`}
+                      </div>
                           <div className="text-xs font-medium text-slate-500">ทรงผม</div>
                         </div>
                       </div>
@@ -521,7 +529,9 @@ export default function StudentPortalPage() {
                           <Hand className="h-4 w-4 text-slate-600" />
                         </div>
                         <div>
-                          <div className={`text-lg font-semibold ${getRateColor(uniformStats.nailRate)}`}>{uniformStats.nailRate}%</div>
+                          <div className={`text-lg font-semibold ${uniformStats.total === 0 ? "text-slate-400" : getRateColor(uniformStats.nailRate)}`}>
+                        {uniformStats.total === 0 ? "ไม่พบข้อมูล" : `${uniformStats.nailRate}%`}
+                      </div>
                           <div className="text-xs font-medium text-slate-500">เล็บ</div>
                         </div>
                       </div>

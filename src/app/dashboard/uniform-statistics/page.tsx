@@ -499,7 +499,9 @@ export default function UniformStatisticsPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-500">จำนวนการตรวจทั้งหมด</p>
-                  <h3 className="text-2xl font-bold text-orange-950 mt-1">{totalRecords} ครั้ง</h3>
+                  <h3 className="text-2xl font-bold text-orange-950 mt-1">
+                    {totalRecords === 0 ? "ไม่พบข้อมูล" : `${totalRecords} ครั้ง`}
+                  </h3>
                 </div>
               </CardContent>
             </Card>
@@ -511,7 +513,9 @@ export default function UniformStatisticsPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-500">อัตราผ่านการแต่งกาย</p>
-                  <h3 className="text-2xl font-bold text-orange-950 mt-1">{uniformPassRate}%</h3>
+                  <h3 className="text-2xl font-bold text-orange-950 mt-1">
+                    {totalRecords === 0 ? "ไม่พบข้อมูล" : `${uniformPassRate}%`}
+                  </h3>
                 </div>
               </CardContent>
             </Card>
@@ -523,7 +527,9 @@ export default function UniformStatisticsPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-500">อัตราผ่านทรงผม</p>
-                  <h3 className="text-2xl font-bold text-orange-950 mt-1">{hairPassRate}%</h3>
+                  <h3 className="text-2xl font-bold text-orange-950 mt-1">
+                    {totalRecords === 0 ? "ไม่พบข้อมูล" : `${hairPassRate}%`}
+                  </h3>
                 </div>
               </CardContent>
             </Card>
@@ -535,7 +541,9 @@ export default function UniformStatisticsPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-500">ยอดหักคะแนนรวม</p>
-                  <h3 className="text-2xl font-bold text-orange-950 mt-1">{totalDeductions}</h3>
+                  <h3 className="text-2xl font-bold text-orange-950 mt-1">
+                    {totalRecords === 0 ? "ไม่พบข้อมูล" : totalDeductions}
+                  </h3>
                 </div>
               </CardContent>
             </Card>

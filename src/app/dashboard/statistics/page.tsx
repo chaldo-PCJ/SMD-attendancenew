@@ -550,11 +550,12 @@ export default function StatisticsPage() {
   }, [sortedClassroomSummaries, scopeIsAll, sortedStudentAnalytics]);
 
   const summaryCards = useMemo(() => {
+    const noDataValue = "ไม่พบข้อมูล";
     if (scopeIsAll) {
       return [
         {
           label: "อัตราเข้าแถวภาพรวม",
-          value: `${overallAttendanceRate}%`,
+          value: filteredAttendance.length === 0 ? noDataValue : `${overallAttendanceRate}%`,
           icon: TrendingUp,
           tone: "orange",
         },
@@ -566,7 +567,7 @@ export default function StatisticsPage() {
         },
         {
           label: "วันบันทึกที่พบ",
-          value: `${uniqueDates} วัน`,
+          value: filteredAttendance.length === 0 ? noDataValue : `${uniqueDates} วัน`,
           icon: Users,
           tone: "blue",
         },
@@ -582,7 +583,7 @@ export default function StatisticsPage() {
     return [
       {
         label: `อัตราเข้าแถวห้อง ${effectiveClassroom}`,
-        value: `${overallAttendanceRate}%`,
+        value: filteredAttendance.length === 0 ? noDataValue : `${overallAttendanceRate}%`,
         icon: TrendingUp,
         tone: "orange",
       },
@@ -594,7 +595,7 @@ export default function StatisticsPage() {
       },
       {
         label: "วันบันทึกที่พบ",
-        value: `${uniqueDates} วัน`,
+        value: filteredAttendance.length === 0 ? noDataValue : `${uniqueDates} วัน`,
         icon: CheckCircle2,
         tone: "blue",
       },
@@ -609,6 +610,7 @@ export default function StatisticsPage() {
     classroomCompletion.hasData,
     classroomCompletion.total,
     effectiveClassroom,
+    filteredAttendance.length,
     overallAttendanceRate,
     scopeIsAll,
     scopeRiskStudents.length,
@@ -858,17 +860,19 @@ export default function StatisticsPage() {
                     : `สัดส่วนการเข้าแถวของ ${classroomLabel(effectiveClassroom)}`}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-6 flex-grow flex flex-col justify-between">
-                <div className="relative h-64 w-full">
-                  <Doughnut data={doughnutData} options={doughnutOptions} />
-                </div>
-                <div className="mt-4 p-4 bg-orange-50/50 border border-orange-100 rounded-xl text-center">
-                  <span className="text-xs font-bold text-gray-500 block">
-                    {scopeIsAll ? "อัตราการเข้าแถวเฉลี่ยทั้งโรงเรียน" : "อัตราการเข้าแถวเฉลี่ยของห้องนี้"}
-                  </span>
-                  <span className="text-3xl font-extrabold text-orange-600 mt-1 block">{overallAttendanceRate}%</span>
-                </div>
-              </CardContent>
+                <CardContent className="p-6 flex-grow flex flex-col justify-between">
+                  <div className="relative h-64 w-full">
+                    <Doughnut data={doughnutData} options={doughnutOptions} />
+                  </div>
+                  <div className="mt-4 p-4 bg-orange-50/50 border border-orange-100 rounded-xl text-center">
+                    <span className="text-xs font-bold text-gray-500 block">
+                      {scopeIsAll ? "อัตราการเข้าแถวเฉลี่ยทั้งโรงเรียน" : "อัตราการเข้าแถวเฉลี่ยของห้องนี้"}
+                    </span>
+                    <span className="text-3xl font-extrabold text-orange-600 mt-1 block">
+                      {filteredAttendance.length === 0 ? "ไม่พบข้อมูล" : `${overallAttendanceRate}%`}
+                    </span>
+                  </div>
+                </CardContent>
             </Card>
 
             <Card className="border-orange-100 shadow-sm lg:col-span-2 bg-white flex flex-col">
