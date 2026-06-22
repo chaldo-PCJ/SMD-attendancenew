@@ -608,10 +608,6 @@ export default function AdminPage() {
       showToast("กรุณาเลือกห้องปลายทาง", "warning");
       return;
     }
-    if (studentToMove.classroom === moveTargetClassroom) {
-      showToast("ห้องปลายทางต้องแตกต่างจากห้องเดิม", "warning");
-      return;
-    }
     setIsMoving(true);
     try {
       const res = await api.moveStudent(
