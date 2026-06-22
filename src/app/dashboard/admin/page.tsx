@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useAuth } from "@/context/AuthContext";
 import { api, Student, DeductionSettings, LatePenaltySettings } from "@/lib/api";
 import { getLatePenaltySettings, saveLatePenaltySettings } from "@/lib/api";
+import { MoveRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -284,6 +285,12 @@ export default function AdminPage() {
   // Edit state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student & { classroom?: string }>({ studentId: "", name: "", number: 0, classroom: "2/1" });
+
+  // Move student state
+  const [isMoveOpen, setIsMoveOpen] = useState(false);
+  const [studentToMove, setStudentToMove] = useState<Student & { classroom: string }>({ studentId: "", name: "", number: 0, classroom: "2/1" });
+  const [moveTargetClassroom, setMoveTargetClassroom] = useState<string>("2/2");
+  const [isMoving, setIsMoving] = useState(false);
 
   const [isClearOpen, setIsClearOpen] = useState(false);
   const [isDeleteAllStudentsOpen, setIsDeleteAllStudentsOpen] = useState(false);
@@ -579,6 +586,57 @@ export default function AdminPage() {
       setIsDeleteOpen(false);
       setStudentToDelete(null);
     } finally { setLoading(false); }
+  };
+
+  // Move student handlers
+  const openMoveDialog = (student: any) => {
+    setStudentToMove({
+      studentId: student.studentId,
+      name: student.name,
+      number: student.number,
+      classroom: student.classroom || selectedClassroom
+    });
+    // Set default target classroom to the next classroom in the list
+    const currentIdx = CLASSROOMS.indexOf(student.classroom || selectedClassroom);
+    const nextIdx = currentIdx < CLASSROOMS.length - 1 ? currentIdx + 1 : 0;
+    setMoveTargetClassroom(CLASSROOMS[nextIdx]);
+    setIsMoveOpen(true);
+  };
+
+  const handleMoveStudent = async () => {
+    if (!studentToMove.studentId || !studentToMove.classroom || !moveTargetClassroom) {
+      showToast("กรุณาเลือกห้องปลายทาง", "warning");
+      return;
+    }
+    if (studentToMove.classroom === moveTargetClassroom) {
+      showToast("ห้องปลายทางต้องแตกต่างจากห้องเดิม", "warning");
+      return;
+    }
+    setIsMoving(true);
+    try {
+      const res = await api.moveStudent(
+        studentToMove.studentId,
+        studentToMove.classroom,
+        moveTargetClassroom,
+        studentToMove.name
+      );
+      if (res.success) {
+        showToast(res.message, "success");
+        setIsMoveOpen(false);
+        // Reload data
+        if (viewMode === "all") {
+          await loadAllStudents();
+        } else {
+          await loadStudents();
+        }
+      } else {
+        showToast(res.message || "เกิดข้อผิดพลาดในการย้ายห้อง", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "เกิดข้อผิดพลาดในการย้ายห้อง", "error");
+    } finally {
+      setIsMoving(false);
+    }
   };
 
   // Edit handlers
@@ -1354,31 +1412,74 @@ export default function AdminPage() {
 
         {/* Edit Student Dialog */}
         <Dialog isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="แก้ไขข้อมูลนักเรียน" description="แก้ไขรายละเอียดของนักเรียน">
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <Input
-              label="รหัสประจำตัวนักเรียน"
-              placeholder="เช่น 100101"
-              value={editingStudent.studentId}
-              onChange={(e) => setEditingStudent({ ...editingStudent, studentId: e.target.value })}
-            />
-            <Input
-              label="ชื่อ - นามสกุล"
-              placeholder="เช่น เด็กชายสมจิต สมหวัง"
-              value={editingStudent.name}
-              onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
-            />
-            <Input
-              label="เลขที่"
-              placeholder="เช่น 1"
-              type="number"
-              value={editingStudent.number.toString()}
-              onChange={(e) => setEditingStudent({ ...editingStudent, number: Math.max(1, parseInt(e.target.value) || 0) })}
-            />
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" size="md" onClick={() => setIsEditOpen(false)} className="px-6 py-2.5">ยกเลิก</Button>
-              <Button type="submit" size="md" className="px-6 py-2.5 font-bold">บันทึก</Button>
+          <div className="space-y-6">
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <Input
+                label="รหัสประจำตัวนักเรียน"
+                placeholder="เช่น 100101"
+                value={editingStudent.studentId}
+                onChange={(e) => setEditingStudent({ ...editingStudent, studentId: e.target.value })}
+              />
+              <Input
+                label="ชื่อ - นามสกุล"
+                placeholder="เช่น เด็กชายสมจิต สมหวัง"
+                value={editingStudent.name}
+                onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
+              />
+              <Input
+                label="เลขที่"
+                placeholder="เช่น 1"
+                type="number"
+                value={editingStudent.number.toString()}
+                onChange={(e) => setEditingStudent({ ...editingStudent, number: Math.max(1, parseInt(e.target.value) || 0) })}
+              />
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" size="md" onClick={() => setIsEditOpen(false)} className="px-6 py-2.5">ยกเลิก</Button>
+                <Button type="submit" size="md" className="px-6 py-2.5 font-bold">บันทึก</Button>
+              </div>
+            </form>
+
+            {/* Move Classroom Section */}
+            <div className="border-t border-slate-100 pt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="text-sm font-bold text-slate-700">ย้ายห้องเรียน</h4>
+              </div>
+              <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-3.5 space-y-3">
+                <div className="text-xs text-blue-800 font-semibold">
+                  ห้องปัจจุบัน: {editingStudent.classroom || selectedClassroom}
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={moveTargetClassroom}
+                    onChange={(e) => setMoveTargetClassroom(e.target.value)}
+                    className="flex-1 h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  >
+                    {CLASSROOMS.filter((c) => c !== (editingStudent.classroom || selectedClassroom)).map((c) => (
+                      <option key={c} value={c}>ห้อง {c}</option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setStudentToMove({
+                        studentId: editingStudent.studentId,
+                        name: editingStudent.name,
+                        number: editingStudent.number,
+                        classroom: editingStudent.classroom || selectedClassroom
+                      });
+                      setIsEditOpen(false);
+                      setIsMoveOpen(true);
+                    }}
+                    className="shrink-0 h-9 px-4 text-xs font-bold rounded-xl bg-blue-500 hover:bg-blue-600 text-white"
+                  >
+                    ย้าย
+                  </Button>
+                </div>
+                <p className="text-[10px] text-blue-600/80">ข้อมูลการเช็กชื่อและการตรวจระเบียบวินัยทั้งหมดจะถูกย้ายไปยังห้องใหม่ด้วย</p>
+              </div>
             </div>
-          </form>
+          </div>
         </Dialog>
 
         {/* Delete confirmation dialog */}
@@ -1576,6 +1677,43 @@ export default function AdminPage() {
                 </div>
               </>
             )}
+          </div>
+        </Dialog>
+
+        {/* Move Student Dialog */}
+        <Dialog isOpen={isMoveOpen} onClose={() => setIsMoveOpen(false)} title="ย้ายห้องเรียนของนักเรียน" description="ย้ายนักเรียนไปยังห้องเรียนอื่น พร้อมข้อมูลการเช็กชื่อและการตรวจระเบียบวินัย">
+          <div className="space-y-5">
+            <div className="bg-blue-50 border border-blue-100 p-3.5 rounded-xl">
+              <div className="text-sm font-bold text-blue-900">นักเรียนที่ต้องการย้าย</div>
+              <div className="text-sm font-semibold text-blue-800 mt-1">
+                {studentToMove.name} (รหัส: {studentToMove.studentId}, เลขที่: {studentToMove.number})
+              </div>
+              <div className="text-xs font-medium text-blue-600 mt-0.5">
+                ห้องปัจจุบัน: {studentToMove.classroom}
+              </div>
+            </div>
+
+            <Select
+              label="ย้ายไปยังห้อง"
+              value={moveTargetClassroom}
+              onChange={(e) => setMoveTargetClassroom(e.target.value)}
+              options={CLASSROOMS.filter((c) => c !== studentToMove.classroom).map((c) => ({
+                value: c,
+                label: `ห้องเรียน ${c}`
+              }))}
+            />
+
+            <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3">
+              <p className="text-xs text-amber-900 font-semibold">
+                ⚠️ ข้อมูลการเช็กชื่อและการตรวจระเบียบวินัยทั้งหมดของนักเรียนคนนี้จะถูกย้ายไปยังห้องใหม่ด้วย
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="outline" size="md" onClick={() => setIsMoveOpen(false)} disabled={isMoving} className="px-6 py-2.5">ยกเลิก</Button>
+            <Button size="md" onClick={handleMoveStudent} loading={isMoving} className="px-6 py-2.5 font-bold bg-blue-500 hover:bg-blue-600 text-white">
+               ยืนยันย้ายห้อง
+            </Button>
           </div>
         </Dialog>
 

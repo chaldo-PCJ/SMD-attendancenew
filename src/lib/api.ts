@@ -161,6 +161,114 @@ export const api = {
     return { success: true, message: `ลบนักเรียนรหัส ${studentId} สำเร็จ` };
   },
 
+  moveStudent: async (
+    studentId: string,
+    fromClassroom: string,
+    toClassroom: string,
+    studentName: string
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      // 1. Find the new number for the student in the target classroom (last number + 1)
+      let newNumber = 1;
+      const { data: targetStudents } = await supabase
+        .from('students')
+        .select('number')
+        .eq('classroom', toClassroom)
+        .order('number', { ascending: false })
+        .limit(1);
+
+      if (targetStudents && targetStudents.length > 0) {
+        newNumber = targetStudents[0].number + 1;
+      }
+
+      // 2. Delete the student from old classroom
+      const { error: deleteError } = await supabase
+        .from('students')
+        .delete()
+        .eq('classroom', fromClassroom)
+        .eq('student_id', studentId);
+
+      if (deleteError) {
+        console.error("Error deleting student from old classroom:", deleteError);
+        return { success: false, message: "เกิดข้อผิดพลาดในการลบข้อมูลนักเรียนจากห้องเดิม" };
+      }
+
+      // 3. Insert into new classroom with the new number
+      const { error: insertError } = await supabase
+        .from('students')
+        .insert({
+          student_id: studentId,
+          name: studentName,
+          number: newNumber,
+          classroom: toClassroom
+        });
+
+      if (insertError) {
+        console.error("Error inserting student to new classroom:", insertError);
+        // Rollback: re-insert back to old classroom
+        await supabase.from('students').insert({
+          student_id: studentId,
+          name: studentName,
+          number: 0,
+          classroom: fromClassroom
+        });
+        return { success: false, message: "เกิดข้อผิดพลาดในการเพิ่มข้อมูลนักเรียนไปยังห้องใหม่" };
+      }
+
+      // 4. Re-number remaining students in the source classroom sequentially
+      const { data: remainingStudents } = await supabase
+        .from('students')
+        .select('student_id, name, number')
+        .eq('classroom', fromClassroom)
+        .order('number', { ascending: true });
+
+      if (remainingStudents && remainingStudents.length > 0) {
+        for (let i = 0; i < remainingStudents.length; i++) {
+          const expectedNumber = i + 1;
+          if (remainingStudents[i].number !== expectedNumber) {
+            await supabase
+              .from('students')
+              .update({ number: expectedNumber })
+              .eq('classroom', fromClassroom)
+              .eq('student_id', remainingStudents[i].student_id);
+          }
+        }
+      }
+
+      // 5. Update all attendance records to new classroom
+      const { error: attendanceError } = await supabase
+        .from('attendance')
+        .update({ classroom: toClassroom })
+        .eq('student_id', studentId)
+        .eq('classroom', fromClassroom);
+
+      if (attendanceError) {
+        console.error("Error updating attendance records:", attendanceError);
+        // Non-critical, continue
+      }
+
+      // 6. Update all uniform check records to new classroom
+      const { error: uniformError } = await supabase
+        .from('uniform_checks')
+        .update({ classroom: toClassroom })
+        .eq('student_id', studentId)
+        .eq('classroom', fromClassroom);
+
+      if (uniformError) {
+        console.error("Error updating uniform check records:", uniformError);
+        // Non-critical, continue
+      }
+
+      return { 
+        success: true, 
+        message: `ย้ายนักเรียนรหัส ${studentId} (${studentName}) จากห้อง ${fromClassroom} ไปยังห้อง ${toClassroom} สำเร็จ (เลขที่ใหม่: ${newNumber})` 
+      };
+    } catch (err: any) {
+      console.error("Error moving student:", err);
+      return { success: false, message: err.message || "เกิดข้อผิดพลาดในการย้ายห้อง" };
+    }
+  },
+
   saveAttendance: async (
     classroom: string,
     date: string,

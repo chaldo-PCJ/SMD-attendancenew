@@ -72,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   return (
-    <div className="min-h-screen flex flex-col xl:flex-row bg-orange-50/10 overflow-x-hidden">
+    <div className="min-h-screen xl:h-screen flex flex-col xl:flex-row bg-orange-50/10 overflow-x-hidden xl:overflow-hidden">
 
       {/* Mobile/Tablet Navbar */}
       <header className="xl:hidden bg-white border-b border-orange-100 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
@@ -158,7 +158,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </nav>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden xl:flex flex-col justify-between w-64 bg-white border-r border-orange-100 sticky top-0 h-screen p-4 flex-shrink-0 shadow-sm">
+      <aside className="hidden xl:flex flex-col justify-between w-64 bg-white border-r border-orange-100 h-screen p-4 flex-shrink-0 shadow-sm">
         <div className="space-y-6">
           {/* Logo & Info */}
           <div className="flex items-center gap-3 px-3 py-3.5 bg-orange-50/50 rounded-2xl border border-orange-100/60">
