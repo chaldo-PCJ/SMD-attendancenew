@@ -746,7 +746,7 @@ export default function StatisticsPage() {
               value={selectedClassroom}
               onChange={(e) => setSelectedClassroom(e.target.value)}
               disabled={false}
-              options={classroomOptions(true)}
+              options={isAdmin ? classroomOptions(true) : classroomOptions(false)}
             />
           </div>
 
@@ -955,13 +955,13 @@ export default function StatisticsPage() {
                       <tr>
                         <SortHeader label="เลขที่" sortKey="number" currentSort={studentSort} onSort={handleStudentSort} className="text-left" />
                         <SortHeader label="นักเรียน" sortKey="studentName" currentSort={studentSort} onSort={handleStudentSort} className="text-left" />
-                        <SortHeader label="มา" sortKey="present" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
-                        <SortHeader label="สาย" sortKey="late" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
-                        <SortHeader label="ลา" sortKey="leave" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
-                        <SortHeader label="ขาด" sortKey="absent" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
-                        <SortHeader label="รวมวัน" sortKey="total" currentSort={studentSort} onSort={handleStudentSort} className="text-center" />
+                        <SortHeader label="มา" sortKey="present" currentSort={studentSort} onSort={handleStudentSort} className="text-center hidden sm:table-cell" />
+                        <SortHeader label="สาย" sortKey="late" currentSort={studentSort} onSort={handleStudentSort} className="text-center hidden sm:table-cell" />
+                        <SortHeader label="ลา" sortKey="leave" currentSort={studentSort} onSort={handleStudentSort} className="text-center hidden sm:table-cell" />
+                        <SortHeader label="ขาด" sortKey="absent" currentSort={studentSort} onSort={handleStudentSort} className="text-center hidden sm:table-cell" />
+                        <SortHeader label="รวมวัน" sortKey="total" currentSort={studentSort} onSort={handleStudentSort} className="text-center hidden md:table-cell" />
                         <SortHeader label="% เข้าแถว" sortKey="attendanceRate" currentSort={studentSort} onSort={handleStudentSort} className="text-right" />
-                        <SortHeader label="หักคะแนน" sortKey="latePenaltyPoints" currentSort={studentSort} onSort={handleStudentSort} className="text-right" />
+                        <SortHeader label="หักคะแนน" sortKey="latePenaltyPoints" currentSort={studentSort} onSort={handleStudentSort} className="text-right hidden md:table-cell" />
                       </tr>
                     </thead>
                     <tbody>
@@ -972,11 +972,11 @@ export default function StatisticsPage() {
                             <div className="font-semibold text-gray-800">{item.studentName}</div>
                             <div className="text-[10px] font-mono text-gray-400">{item.studentId}</div>
                           </td>
-                          <td className="px-4 py-3 text-center text-emerald-700 font-semibold">{item.present}</td>
-                          <td className="px-4 py-3 text-center text-amber-700 font-semibold">{item.late}</td>
-                          <td className="px-4 py-3 text-center text-blue-700 font-semibold">{item.leave}</td>
-                          <td className="px-4 py-3 text-center text-red-700 font-semibold">{item.absent}</td>
-                          <td className="px-4 py-3 text-center text-gray-700 font-semibold">{item.total}</td>
+                          <td className="px-4 py-3 text-center text-emerald-700 font-semibold hidden sm:table-cell">{item.present}</td>
+                          <td className="px-4 py-3 text-center text-amber-700 font-semibold hidden sm:table-cell">{item.late}</td>
+                          <td className="px-4 py-3 text-center text-blue-700 font-semibold hidden sm:table-cell">{item.leave}</td>
+                          <td className="px-4 py-3 text-center text-red-700 font-semibold hidden sm:table-cell">{item.absent}</td>
+                          <td className="px-4 py-3 text-center text-gray-700 font-semibold hidden md:table-cell">{item.total}</td>
                           <td className="px-4 py-3 text-right">
                             <span
                               className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold ${item.attendanceRate >= 80
@@ -989,7 +989,7 @@ export default function StatisticsPage() {
                               {item.attendanceRate}%
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right hidden md:table-cell">
                             {item.latePenaltyPoints > 0 ? (
                               <span className="inline-flex rounded-lg px-2 py-0.5 text-xs font-bold bg-red-50 text-red-700">
                                 -{item.latePenaltyPoints}

@@ -168,7 +168,7 @@ export default function UniformStatisticsPage() {
 
   const isAdmin = session.role === "admin";
   const scopeIsAll = selectedClassroom === ALL_CLASSROOMS_VALUE;
-  const effectiveClassroom = isAdmin ? selectedClassroom : session.classroomLock || "2/1";
+  const effectiveClassroom = selectedClassroom;
 
   useEffect(() => {
     if (session.role === "admin") {
@@ -176,15 +176,19 @@ export default function UniformStatisticsPage() {
       return;
     }
 
+    // Teacher defaults to own classroom but can change freely
     if (session.classroomLock) {
-      setSelectedClassroom(session.classroomLock);
+      setSelectedClassroom((prev) => {
+        if (prev === session.classroomLock) return prev;
+        return session.classroomLock || prev;
+      });
     }
   }, [session.role, session.classroomLock]);
 
   const loadStats = useCallback(async () => {
     setLoading(true);
     try {
-      const classroomScope = isAdmin ? selectedClassroom : effectiveClassroom;
+      const classroomScope = selectedClassroom;
 
       const checkRes = await api.getAllUniformChecks(
         classroomScope === ALL_CLASSROOMS_VALUE ? undefined : classroomScope
@@ -209,7 +213,7 @@ export default function UniformStatisticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveClassroom, isAdmin, selectedClassroom, showToast]);
+  }, [selectedClassroom, showToast]);
 
   useEffect(() => {
     loadStats();
@@ -484,7 +488,7 @@ export default function UniformStatisticsPage() {
               label="ห้องเรียน"
               value={selectedClassroom}
               onChange={(e) => setSelectedClassroom(e.target.value)}
-              disabled={!isAdmin}
+              disabled={false}
               options={isAdmin ? classroomOptions(true) : classroomOptions(false)}
             />
           </div>

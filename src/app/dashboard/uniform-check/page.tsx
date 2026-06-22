@@ -51,6 +51,7 @@ export default function UniformCheckPage() {
     if (!activeClassroom || !selectedDate) return;
     setLoading(true);
     setStudents([]);
+    setTeacherName("");
     try {
       const [studentRes, checkRes] = await Promise.all([
         api.getStudents(activeClassroom),
